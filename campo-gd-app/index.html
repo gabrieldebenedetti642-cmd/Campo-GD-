@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Campo GD — Gestión</title>
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="app-shell">
+  <div class="topbar">
+    <div class="topbar-top">
+      <div class="tag-mark"><span>GD</span></div>
+      <div class="brand">Campo GD<small>Gestión del campo</small></div>
+      <div class="sync-pill" id="sync-pill" style="margin-left:auto">
+        <span class="sync-dot"></span>
+        <span class="sync-label">Conectando…</span>
+      </div>
+    </div>
+    <nav class="nav-groups" id="nav-groups"></nav>
+  </div>
+
+  <main>
+    <div id="view-container"></div>
+  </main>
+
+  <footer class="app-footer">Campo GD — Módulo Dashboard + Contabilidad</footer>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
