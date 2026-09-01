@@ -129,15 +129,17 @@ h1, h2, h3, .display {
 }
 .nav-group { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .nav-group-label {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 700;
-  font-size: 10.5px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--gold);
-  margin-right: 6px;
-  opacity: 0.85;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.35);
+  margin-right: 4px;
+  pointer-events: none;
+  user-select: none;
 }
+.nav-group-label::after { content: ":"; }
 .tabs {
   display: flex;
   gap: 2px;
@@ -437,6 +439,19 @@ table.rain-grid tr.total-row td {
 
 .gdp-pos { color: var(--green); font-weight: 600; }
 .gdp-neg { color: var(--red); font-weight: 600; }
+
+/* ---------- panel de importación ---------- */
+.import-panel input[type="file"] {
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  padding: 8px;
+  border: 1.5px dashed var(--line);
+  border-radius: 9px;
+  background: #FCFBF8;
+  width: 100%;
+  max-width: 420px;
+}
+.import-panel .data-table { margin-top: 10px; }
 
 @media (max-width: 640px) {
   main { padding: 16px 12px 50px; }
