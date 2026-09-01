@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, daysBetween } from "./utils.js";
+import { buildImportPanel } from "./importar.js";
 
 const COL = "pesadas";
 let items = [];
@@ -11,6 +12,30 @@ export function renderPesadas(container) {
   container.appendChild(el("div", { class: "page-head" }, [el("h1", {}, "Pesadas")]));
 
   container.appendChild(el("div", { class: "panel" }, [el("h2", {}, "Cargar pesada"), buildForm()]));
+
+  container.appendChild(
+    el("div", { class: "panel" }, [
+      el("h2", {}, "Importar varias desde Excel"),
+      buildImportPanel({
+        columnDefs: [
+          { key: "fecha", label: "Fecha", type: "date", candidates: ["fecha"], required: true },
+          { key: "caravana", label: "Caravana", type: "text", candidates: ["caravana"], required: false },
+          { key: "peso", label: "Peso (kg)", type: "number", candidates: ["peso", "kg"], required: true },
+        ],
+        previewColumns: [
+          { key: "fecha", label: "Fecha" },
+          { key: "caravana", label: "Caravana" },
+          { key: "peso", label: "Peso (kg)" },
+        ],
+        ejemploTexto: "El archivo debe tener columnas Fecha, Caravana y Peso (en cualquier orden; los nombres pueden variar un poco, por ejemplo \"Peso (kg)\").",
+        onConfirm: async (filas) => {
+          for (const f of filas) {
+            await addDocTo(COL, { fecha: f.fecha, caravana: f.caravana, peso: f.peso });
+          }
+        },
+      })
+    ])
+  );
 
   container.appendChild(
     el("div", { class: "panel" }, [
