@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, years, MESES_CORTOS } from "./utils.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "lluvias";
 let items = [];
@@ -70,6 +71,7 @@ function buildForm() {
     const data = {
       fecha: document.getElementById("ll-fecha").value,
       mm: parseFloat(document.getElementById("ll-mm").value) || 0,
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha) {
       toast("Completá la fecha", true);
@@ -163,12 +165,13 @@ function renderTable() {
     return;
   }
   const table = el("table", { class: "data-table" });
-  table.appendChild(el("thead", {}, el("tr", {}, [el("th", {}, "Fecha"), el("th", {}, "mm"), el("th", {}, "")])));
+  table.appendChild(el("thead", {}, el("tr", {}, [el("th", {}, "Fecha"), el("th", {}, "mm"), el("th", {}, "Usuario"), el("th", {}, "")])));
   const tbody = el("tbody");
   items.forEach((it) => {
     tbody.appendChild(el("tr", {}, [
       el("td", {}, fmtDate(it.fecha)),
       el("td", { class: "num" }, (it.mm ?? 0).toFixed(1)),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });

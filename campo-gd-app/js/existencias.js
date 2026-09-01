@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, MOTIVOS_EXISTENCIAS } from "./utils.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "existencias";
 const COL_POTREROS = "potreros";
@@ -97,6 +98,7 @@ function buildForm() {
       motivo: document.getElementById("ex-motivo").value,
       cantidad: parseInt(document.getElementById("ex-cantidad").value, 10) || 0,
       observaciones: document.getElementById("ex-obs").value.trim(),
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha || !data.cantidad) {
       toast("Completá al menos fecha y cantidad", true);
@@ -309,7 +311,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "Categoría"), el("th", {}, "Mov."), el("th", {}, "Motivo"),
-    el("th", {}, "Cant."), el("th", {}, "Obs."), el("th", {}, ""),
+    el("th", {}, "Cant."), el("th", {}, "Obs."), el("th", {}, "Usuario"), el("th", {}, ""),
   ])));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -320,6 +322,7 @@ function renderTable() {
       el("td", {}, it.motivo || ""),
       el("td", { class: "num" }, String(it.cantidad ?? "")),
       el("td", {}, it.observaciones || ""),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });

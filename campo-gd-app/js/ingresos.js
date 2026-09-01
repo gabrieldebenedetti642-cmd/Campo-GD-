@@ -1,6 +1,7 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CONCEPTOS_INGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue } from "./utils.js";
 import { buildScannerPanel } from "./facturaScanner.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "ingresos";
 let items = [];
@@ -82,6 +83,7 @@ function buildForm() {
       cliente: document.getElementById("ing-cliente").value.trim(),
       moneda: document.getElementById("ing-moneda").value,
       monto: parseFloat(document.getElementById("ing-monto").value) || 0,
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha || !data.monto) {
       toast("Completá al menos fecha y monto", true);
@@ -143,7 +145,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   const thead = el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "N° Factura"), el("th", {}, "Concepto"),
-    el("th", {}, "Cliente"), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, ""),
+    el("th", {}, "Cliente"), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, "Usuario"), el("th", {}, ""),
   ]));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -154,6 +156,7 @@ function renderTable() {
       el("td", {}, it.cliente || ""),
       el("td", {}, el("span", { class: "badge " + (it.moneda === "USD" ? "usd" : "ars") }, it.moneda || "$")),
       el("td", { class: "num" }, fmtMoney(it.monto, it.moneda)),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]);
     tbody.appendChild(tr);

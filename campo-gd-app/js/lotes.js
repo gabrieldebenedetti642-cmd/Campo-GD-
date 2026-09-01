@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, daysBetween } from "./utils.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "lotes";
 let items = [];
@@ -71,6 +72,7 @@ function buildForm() {
       fechaVenta: document.getElementById("lote-fecha-venta").value,
       kgVenta: parseFloat(document.getElementById("lote-kg-venta").value) || 0,
       precioVenta: parseFloat(document.getElementById("lote-precio-venta").value) || 0,
+      usuario: getUsuarioActual(),
     };
     if (!data.idLote || !data.fechaCompra) {
       toast("Completá al menos ID de lote y fecha de compra", true);
@@ -164,7 +166,7 @@ function renderTable() {
     el("th", {}, "ID"), el("th", {}, "Categoría"), el("th", {}, "Cant."), el("th", {}, "Moneda"),
     el("th", {}, "F. compra"), el("th", {}, "Costo"), el("th", {}, "F. venta"), el("th", {}, "Ingreso"),
     el("th", {}, "Margen"), el("th", {}, "Días"), el("th", {}, "GDP"), el("th", {}, "$/cab"),
-    el("th", {}, "Estado"), el("th", {}, ""),
+    el("th", {}, "Estado"), el("th", {}, "Usuario"), el("th", {}, ""),
   ])));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -184,6 +186,7 @@ function renderTable() {
       el("td", { class: "num" }, c.gdp === null ? "-" : c.gdp.toFixed(3)),
       el("td", { class: "num" }, c.margenCabeza === null ? "-" : c.margenCabeza.toFixed(1)),
       el("td", {}, el("span", { class: "badge " + (c.vendido ? "ars" : "usd") }, c.estado)),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });

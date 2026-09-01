@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, TIPOS_LABOR } from "./utils.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "labores";
 let items = [];
@@ -65,6 +66,7 @@ function buildForm() {
       horas: parseFloat(document.getElementById("lab-horas").value) || 0,
       gasoil: parseFloat(document.getElementById("lab-gasoil").value) || 0,
       observaciones: document.getElementById("lab-obs").value.trim(),
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha) {
       toast("Completá al menos la fecha", true);
@@ -146,7 +148,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "Potrero"), el("th", {}, "Área"), el("th", {}, "Labor"),
-    el("th", {}, "Horas"), el("th", {}, "Gasoil"), el("th", {}, "Obs."), el("th", {}, ""),
+    el("th", {}, "Horas"), el("th", {}, "Gasoil"), el("th", {}, "Obs."), el("th", {}, "Usuario"), el("th", {}, ""),
   ])));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -158,6 +160,7 @@ function renderTable() {
       el("td", { class: "num" }, (it.horas ?? "").toString()),
       el("td", { class: "num" }, (it.gasoil ?? "").toString()),
       el("td", {}, it.observaciones || ""),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });

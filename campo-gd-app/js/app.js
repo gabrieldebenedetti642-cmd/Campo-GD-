@@ -11,6 +11,7 @@ import { renderFlujoCaja, unmountFlujoCaja } from "./flujocaja.js";
 import { renderPresupuesto, unmountPresupuesto } from "./presupuesto.js";
 import { renderEscenarios, unmountEscenarios } from "./escenarios.js";
 import { modoLocal } from "./db.js";
+import { ensureUsuario, buildUsuarioPill } from "./usuario.js";
 
 const views = {
   dashboard: { render: renderDashboard, unmount: unmountDashboard, label: "Dashboard" },
@@ -81,9 +82,23 @@ function initSyncPill() {
   }
 }
 
+function initUsuarioPill() {
+  const syncPill = document.getElementById("sync-pill");
+  const rightWrap = document.createElement("div");
+  rightWrap.className = "topbar-right";
+  rightWrap.style.marginLeft = "auto";
+  syncPill.parentElement.insertBefore(rightWrap, syncPill);
+  syncPill.style.marginLeft = "0";
+  rightWrap.appendChild(buildUsuarioPill());
+  rightWrap.appendChild(syncPill);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  initTabs();
-  initSyncPill();
-  const startView = (window.location.hash || "#dashboard").slice(1);
-  switchTo(views[startView] ? startView : "dashboard");
+  ensureUsuario(() => {
+    initTabs();
+    initSyncPill();
+    initUsuarioPill();
+    const startView = (window.location.hash || "#dashboard").slice(1);
+    switchTo(views[startView] ? startView : "dashboard");
+  });
 });

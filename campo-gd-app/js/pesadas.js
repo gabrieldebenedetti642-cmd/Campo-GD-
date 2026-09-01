@@ -1,6 +1,7 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar, daysBetween } from "./utils.js";
 import { buildImportPanel } from "./importar.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "pesadas";
 let items = [];
@@ -30,7 +31,7 @@ export function renderPesadas(container) {
         ejemploTexto: "El archivo debe tener columnas Fecha, Caravana y Peso (en cualquier orden; los nombres pueden variar un poco, por ejemplo \"Peso (kg)\").",
         onConfirm: async (filas) => {
           for (const f of filas) {
-            await addDocTo(COL, { fecha: f.fecha, caravana: f.caravana, peso: f.peso });
+            await addDocTo(COL, { fecha: f.fecha, caravana: f.caravana, peso: f.peso, usuario: getUsuarioActual() });
           }
         },
       })
@@ -80,6 +81,7 @@ function buildForm() {
       fecha: document.getElementById("pes-fecha").value,
       caravana: document.getElementById("pes-caravana").value.trim(),
       peso: parseFloat(document.getElementById("pes-peso").value) || 0,
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha || !data.peso) {
       toast("Completá al menos fecha y peso", true);
@@ -167,7 +169,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "Caravana"), el("th", {}, "Peso (kg)"),
-    el("th", {}, "GDP (kg/día)"), el("th", {}, ""),
+    el("th", {}, "GDP (kg/día)"), el("th", {}, "Usuario"), el("th", {}, ""),
   ])));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -178,6 +180,7 @@ function renderTable() {
       el("td", {}, it.caravana || ""),
       el("td", { class: "num" }, (it.peso ?? "").toString()),
       el("td", { class: "num " + gdpClass }, gdpTxt),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });

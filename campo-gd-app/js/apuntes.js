@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
 import { fmtDate, todayISO, el, toast, confirmar } from "./utils.js";
+import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "apuntes";
 const TIPOS_APUNTE = [
@@ -57,6 +58,7 @@ function buildForm() {
       detalle: document.getElementById("ap-detalle").value.trim(),
       proximoControl: document.getElementById("ap-proximo").value,
       observaciones: document.getElementById("ap-obs").value.trim(),
+      usuario: getUsuarioActual(),
     };
     if (!data.fecha) {
       toast("Completá al menos la fecha", true);
@@ -129,7 +131,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "Vehículo/Equipo"), el("th", {}, "Tipo"),
-    el("th", {}, "Detalle"), el("th", {}, "Próximo control"), el("th", {}, "Obs."), el("th", {}, ""),
+    el("th", {}, "Detalle"), el("th", {}, "Próximo control"), el("th", {}, "Obs."), el("th", {}, "Usuario"), el("th", {}, ""),
   ])));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -140,6 +142,7 @@ function renderTable() {
       el("td", {}, it.detalle || ""),
       el("td", {}, it.proximoControl ? fmtDate(it.proximoControl) : ""),
       el("td", {}, it.observaciones || ""),
+      el("td", {}, usuarioBadge(it.usuario)),
       el("td", {}, rowActions(it)),
     ]));
   });
