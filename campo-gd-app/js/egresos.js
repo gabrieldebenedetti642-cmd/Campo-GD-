@@ -1,5 +1,6 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_EGRESO } from "./utils.js";
+import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_EGRESO, CONCEPTOS_EGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue } from "./utils.js";
+import { buildScannerPanel } from "./facturaScanner.js";
 
 const COL = "egresos";
 let items = [];
@@ -10,6 +11,21 @@ export function renderEgresos(container) {
   container.innerHTML = "";
 
   container.appendChild(el("div", { class: "page-head" }, [el("h1", {}, "Egresos")]));
+
+  container.appendChild(
+    el("div", { class: "panel" }, [
+      el("h2", {}, "Escanear factura"),
+      buildScannerPanel({
+        onData: (parsed) => {
+          if (parsed.fecha) document.getElementById("eg-fecha").value = parsed.fecha;
+          if (parsed.monto) document.getElementById("eg-monto").value = parsed.monto;
+          if (parsed.moneda) document.getElementById("eg-moneda").value = parsed.moneda;
+          if (parsed.comprobante) document.getElementById("eg-comprobante").value = parsed.comprobante;
+          document.getElementById("eg-fecha").scrollIntoView({ behavior: "smooth", block: "center" });
+        },
+      }),
+    ])
+  );
 
   container.appendChild(
     el("div", { class: "panel" }, [el("h2", {}, "Cargar gasto"), buildForm()])
@@ -37,9 +53,10 @@ function buildForm() {
   const form = el("form", { class: "entry-form", id: "egreso-form" });
 
   const fFecha = fieldInput("Fecha", "date", "eg-fecha", todayISO());
-  const fConcepto = fieldInput("Concepto", "text", "eg-concepto", "");
+  const fConcepto = fieldSelectOtro("Concepto", "eg-concepto", CONCEPTOS_EGRESO);
   const fCategoria = fieldSelect("Categoría", "eg-categoria", CATEGORIAS_EGRESO);
   const fProveedor = fieldInput("Proveedor", "text", "eg-proveedor", "");
+  const fComprobante = fieldInput("N° Comprobante", "text", "eg-comprobante", "");
   const fMoneda = fieldSelect("Moneda", "eg-moneda", ["$", "USD"]);
   const fMonto = fieldInput("Monto", "number", "eg-monto", "");
   fMonto.querySelector("input").step = "0.01";
@@ -49,15 +66,16 @@ function buildForm() {
     el("button", { class: "btn btn-primary", type: "submit", id: "eg-submit-btn" }, "Guardar"),
   ]);
 
-  [fFecha, fConcepto, fCategoria, fProveedor, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
+  [fFecha, fConcepto, fCategoria, fProveedor, fComprobante, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {
       fecha: document.getElementById("eg-fecha").value,
-      concepto: document.getElementById("eg-concepto").value.trim(),
+      concepto: getSelectOtroValue("eg-concepto"),
       categoria: document.getElementById("eg-categoria").value,
       proveedor: document.getElementById("eg-proveedor").value.trim(),
+      comprobante: document.getElementById("eg-comprobante").value.trim(),
       moneda: document.getElementById("eg-moneda").value,
       monto: parseFloat(document.getElementById("eg-monto").value) || 0,
     };
@@ -77,6 +95,7 @@ function buildForm() {
       }
       form.reset();
       document.getElementById("eg-fecha").value = todayISO();
+      setSelectOtroValue("eg-concepto", "", CONCEPTOS_EGRESO);
     } catch (err) {
       console.error(err);
       toast("No se pudo guardar: " + err.message, true);
@@ -118,7 +137,7 @@ function renderTable() {
   const table = el("table", { class: "data-table" });
   const thead = el("thead", {}, el("tr", {}, [
     el("th", {}, "Fecha"), el("th", {}, "Concepto"), el("th", {}, "Categoría"),
-    el("th", {}, "Proveedor"), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, ""),
+    el("th", {}, "Proveedor"), el("th", {}, "N° Comp."), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, ""),
   ]));
   const tbody = el("tbody");
   items.forEach((it) => {
@@ -127,6 +146,7 @@ function renderTable() {
       el("td", {}, it.concepto || ""),
       el("td", {}, it.categoria || ""),
       el("td", {}, it.proveedor || ""),
+      el("td", {}, it.comprobante || ""),
       el("td", {}, el("span", { class: "badge " + (it.moneda === "USD" ? "usd" : "ars") }, it.moneda || "$")),
       el("td", { class: "num" }, fmtMoney(it.monto, it.moneda)),
       el("td", {}, rowActions(it)),
@@ -161,9 +181,10 @@ function rowActions(it) {
 function startEdit(it) {
   editingId = it.id;
   document.getElementById("eg-fecha").value = it.fecha || "";
-  document.getElementById("eg-concepto").value = it.concepto || "";
+  setSelectOtroValue("eg-concepto", it.concepto || "", CONCEPTOS_EGRESO);
   document.getElementById("eg-categoria").value = it.categoria || CATEGORIAS_EGRESO[0];
   document.getElementById("eg-proveedor").value = it.proveedor || "";
+  document.getElementById("eg-comprobante").value = it.comprobante || "";
   document.getElementById("eg-moneda").value = it.moneda || "$";
   document.getElementById("eg-monto").value = it.monto || "";
   document.getElementById("eg-submit-btn").textContent = "Guardar cambios";

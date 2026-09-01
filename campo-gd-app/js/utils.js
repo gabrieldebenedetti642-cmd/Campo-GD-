@@ -14,6 +14,24 @@ export const TIPOS_LABOR = ["Siembra", "Fertilización", "Movimiento de tierra",
 
 export const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+export const CONCEPTOS_INGRESO = [
+  "Venta de terneros", "Venta de terneras", "Venta de novillos", "Venta de vaquillonas",
+  "Venta de vacas", "Venta de vacas de descarte", "Venta de toros", "Venta de vientres",
+  "Venta de hacienda (general)", "Venta de granos / cosecha", "Arrendamiento de campo",
+  "Pastaje / Pastoreo", "Servicios agrícolas prestados", "Subsidios", "Otro"
+];
+
+export const CONCEPTOS_EGRESO = [
+  "Vacunación", "Desparasitación / Curación", "Sanidad (otro)",
+  "Suplemento / Alimento balanceado", "Forraje / Rollos / Silo",
+  "Nafta", "Gasoil", "Aceite / Lubricantes",
+  "Sueldo / Jornal", "Changa / Contratista",
+  "Alambre / Postes / Tranqueras", "Herramientas", "Semillas", "Agroquímicos",
+  "Impuesto inmobiliario", "Impuesto a las ganancias", "Otro impuesto",
+  "Reparación de maquinaria", "Reparación de instalaciones", "Service de vehículo",
+  "Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"
+];
+
 export function fmtMoney(n, moneda) {
   const num = Number(n) || 0;
   const abs = Math.abs(num).toLocaleString("es-AR", { maximumFractionDigits: 0 });
@@ -62,6 +80,58 @@ export function el(tag, attrs = {}, children = []) {
     node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
   });
   return node;
+}
+
+// Campo "select + Otro (especificar)": un desplegable con lista fija más una
+// opción "Otro" que revela un input de texto libre. id-otro es el input extra.
+export function fieldSelectOtro(label, id, options) {
+  const wrap = el("div", { class: "field" });
+  wrap.appendChild(el("label", { for: id }, label));
+  const select = el("select", {
+    id,
+    onchange: (e) => {
+      const otroInput = document.getElementById(id + "-otro");
+      if (otroInput) otroInput.style.display = e.target.value === "Otro" ? "block" : "none";
+    },
+  });
+  options.forEach((o) => select.appendChild(el("option", { value: o }, o)));
+  wrap.appendChild(select);
+  wrap.appendChild(el("input", {
+    type: "text", id: id + "-otro", placeholder: "Especificar...",
+    style: "display:none; margin-top:6px",
+  }));
+  return wrap;
+}
+
+export function getSelectOtroValue(id) {
+  const select = document.getElementById(id);
+  if (!select) return "";
+  if (select.value === "Otro") {
+    const otro = document.getElementById(id + "-otro");
+    return (otro && otro.value.trim()) || "Otro";
+  }
+  return select.value;
+}
+
+// Completa un fieldSelectOtro con un valor guardado: si coincide con una
+// opción de la lista la selecciona, si no cae en "Otro" y llena el texto libre.
+export function setSelectOtroValue(id, value, options) {
+  const select = document.getElementById(id);
+  const otroInput = document.getElementById(id + "-otro");
+  if (!select) return;
+  if (options.includes(value)) {
+    select.value = value;
+    if (otroInput) otroInput.style.display = "none";
+  } else if (value) {
+    select.value = "Otro";
+    if (otroInput) {
+      otroInput.style.display = "block";
+      otroInput.value = value;
+    }
+  } else {
+    select.value = options[0];
+    if (otroInput) otroInput.style.display = "none";
+  }
 }
 
 let toastTimer = null;
