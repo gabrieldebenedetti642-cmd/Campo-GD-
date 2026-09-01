@@ -10,7 +10,7 @@ import { renderApuntes, unmountApuntes } from "./apuntes.js";
 import { renderFlujoCaja, unmountFlujoCaja } from "./flujocaja.js";
 import { renderPresupuesto, unmountPresupuesto } from "./presupuesto.js";
 import { renderEscenarios, unmountEscenarios } from "./escenarios.js";
-import { modoLocal } from "./db.js";
+import { modoLocal, estaConectado } from "./db.js";
 import { ensureUsuario, buildUsuarioPill } from "./usuario.js";
 
 const views = {
@@ -77,9 +77,17 @@ function initSyncPill() {
   if (modoLocal) {
     dot.classList.add("off");
     label.textContent = "Modo local (este aparato)";
-  } else {
-    label.textContent = "Sincronizado";
+    return;
   }
+  label.textContent = "Conectando…";
+  estaConectado().then((ok) => {
+    if (ok) {
+      label.textContent = "Sincronizado";
+    } else {
+      dot.classList.add("err");
+      label.textContent = "Sin conexión (guardando local)";
+    }
+  });
 }
 
 function initUsuarioPill() {

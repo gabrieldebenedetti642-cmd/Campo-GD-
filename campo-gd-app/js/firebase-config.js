@@ -27,12 +27,12 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyBpxmGY4yC061Kyg6TzS7cBkNTRDrd95y4",
+  authDomain: "campo-gd-gestion.firebaseapp.com",
+  projectId: "campo-gd-gestion",
+  storageBucket: "campo-gd-gestion.firebasestorage.app",
+  messagingSenderId: "977190089240",
+  appId: "1:977190089240:web:54f5dd1f4a34cfa088096d"
 };
 
 export const FIREBASE_CONFIGURADO = firebaseConfig.apiKey !== "TU_API_KEY";

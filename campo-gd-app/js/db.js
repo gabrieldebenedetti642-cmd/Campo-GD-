@@ -4,20 +4,50 @@ export const modoLocal = !FIREBASE_CONFIGURADO;
 
 let db = null;
 let fs = null; // funciones de firestore, cargadas dinámicamente solo si hace falta
+let initPromise = null;
 
-async function initFirestore() {
-  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js");
-  fs = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
-  const app = initializeApp(firebaseConfig);
-  db = fs.getFirestore(app);
+function initFirestore() {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js");
+    fs = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+    const app = initializeApp(firebaseConfig);
+    db = fs.getFirestore(app);
+  })();
+  return initPromise;
 }
 
+// Arranca la conexión en segundo plano apenas carga el archivo, SIN bloquear
+// nada (la app tiene que poder mostrarse aunque no haya señal en el campo).
 if (!modoLocal) {
-  try {
-    await initFirestore();
-  } catch (e) {
+  initFirestore().catch((e) => {
     console.error("No se pudo conectar a Firebase, sigo en modo local:", e);
+  });
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
+// Espera hasta `ms` a que Firestore esté listo. Si tarda más (sin señal, etc.)
+// devuelve false y quien llama sigue con el respaldo local — nunca se cuelga.
+async function firestoreListo(ms = 8000) {
+  if (modoLocal) return false;
+  try {
+    await withTimeout(initFirestore(), ms);
+    return !!db;
+  } catch {
+    return false;
   }
+}
+
+// Para la pastilla de estado en la barra de arriba: no bloquea la carga de
+// la app, se puede llamar aparte y actualizar la UI cuando responda.
+export async function estaConectado() {
+  return firestoreListo(6000);
 }
 
 // ------------------------------------------------------------
@@ -72,67 +102,105 @@ function localListen(coleccion, callback) {
 }
 
 // ------------------------------------------------------------
-// API pública: funciona igual esté en modo local o con Firestore
+// API pública: funciona igual esté en modo local o con Firestore.
+// Nunca se cuelga: si Firestore no contesta rápido, usa el respaldo local.
 // ------------------------------------------------------------
-export function addDocTo(coleccion, data) {
-  if (modoLocal || !db) return Promise.resolve(localAdd(coleccion, data));
-  return fs.addDoc(fs.collection(db, coleccion), data).then((ref) => ref.id);
+export async function addDocTo(coleccion, data) {
+  if (await firestoreListo()) {
+    return fs.addDoc(fs.collection(db, coleccion), data).then((ref) => ref.id);
+  }
+  return localAdd(coleccion, data);
 }
 
-export function updateDocIn(coleccion, id, data) {
-  if (modoLocal || !db) return Promise.resolve(localUpdate(coleccion, id, data));
-  return fs.updateDoc(fs.doc(db, coleccion, id), data);
+export async function updateDocIn(coleccion, id, data) {
+  if (await firestoreListo()) {
+    return fs.updateDoc(fs.doc(db, coleccion, id), data);
+  }
+  return localUpdate(coleccion, id, data);
 }
 
-export function deleteDocFrom(coleccion, id) {
-  if (modoLocal || !db) return Promise.resolve(localDelete(coleccion, id));
-  return fs.deleteDoc(fs.doc(db, coleccion, id));
+export async function deleteDocFrom(coleccion, id) {
+  if (await firestoreListo()) {
+    return fs.deleteDoc(fs.doc(db, coleccion, id));
+  }
+  return localDelete(coleccion, id);
 }
 
-// callback recibe un array de {id, ...campos}
+// callback recibe un array de {id, ...campos}. Devuelve una función para
+// dejar de escuchar (unsubscribe), disponible de inmediato aunque la
+// conexión a Firestore todavía se esté resolviendo.
 export function listenTo(coleccion, callback) {
-  if (modoLocal || !db) return localListen(coleccion, callback);
-  const q = fs.query(fs.collection(db, coleccion));
-  return fs.onSnapshot(
-    q,
-    (snap) => {
-      const items = [];
-      snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-      callback(items);
-    },
-    (err) => {
-      console.error("Error escuchando " + coleccion + ":", err);
-      callback([], err);
+  if (modoLocal) return localListen(coleccion, callback);
+
+  let cancelado = false;
+  let unsub = null;
+  firestoreListo().then((listo) => {
+    if (cancelado) return;
+    if (listo) {
+      const q = fs.query(fs.collection(db, coleccion));
+      unsub = fs.onSnapshot(
+        q,
+        (snap) => {
+          const items = [];
+          snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+          callback(items);
+        },
+        (err) => {
+          console.error("Error escuchando " + coleccion + ":", err);
+          callback([], err);
+        }
+      );
+    } else {
+      unsub = localListen(coleccion, callback);
     }
-  );
+  });
+  return () => {
+    cancelado = true;
+    if (unsub) unsub();
+  };
 }
 
 // settings: documento único por clave (ej. cotización dólar)
-export function setSetting(key, value) {
-  if (modoLocal || !db) {
-    const settings = JSON.parse(localStorage.getItem("campogd_settings") || "{}");
-    settings[key] = value;
-    localStorage.setItem("campogd_settings", JSON.stringify(settings));
-    notifyLocal("settings");
-    return Promise.resolve();
+export async function setSetting(key, value) {
+  if (await firestoreListo()) {
+    return fs.setDoc(fs.doc(db, "settings", key), { value }, { merge: true });
   }
-  return fs.setDoc(fs.doc(db, "settings", key), { value }, { merge: true });
+  const settings = JSON.parse(localStorage.getItem("campogd_settings") || "{}");
+  settings[key] = value;
+  localStorage.setItem("campogd_settings", JSON.stringify(settings));
+  notifyLocal("settings");
 }
 
 export function listenSetting(key, callback) {
-  if (modoLocal || !db) {
-    const read = () => {
-      const settings = JSON.parse(localStorage.getItem("campogd_settings") || "{}");
-      callback(settings[key]);
-    };
-    listenersLocal["settings"] = listenersLocal["settings"] || [];
-    listenersLocal["settings"].push(read);
-    read();
-    return () => {
-      listenersLocal["settings"] = listenersLocal["settings"].filter((c) => c !== read);
-    };
-  }
-  return fs.onSnapshot(fs.doc(db, "settings", key), (d) => {
-    callback(d.exists() ? d.data().value : undefined);
+  if (modoLocal) return listenSettingLocal(key, callback);
+
+  let cancelado = false;
+  let unsub = null;
+  firestoreListo().then((listo) => {
+    if (cancelado) return;
+    if (listo) {
+      unsub = fs.onSnapshot(fs.doc(db, "settings", key), (d) => {
+        callback(d.exists() ? d.data().value : undefined);
+      });
+    } else {
+      unsub = listenSettingLocal(key, callback);
+    }
   });
+  return () => {
+    cancelado = true;
+    if (unsub) unsub();
+  };
+}
+
+function listenSettingLocal(key, callback) {
+  const read = () => {
+    const settings = JSON.parse(localStorage.getItem("campogd_settings") || "{}");
+    callback(settings[key]);
+  };
+  listenersLocal["settings"] = listenersLocal["settings"] || [];
+  listenersLocal["settings"].push(read);
+  read();
+  return () => {
+    listenersLocal["settings"] = listenersLocal["settings"].filter((c) => c !== read);
+  };
 }
