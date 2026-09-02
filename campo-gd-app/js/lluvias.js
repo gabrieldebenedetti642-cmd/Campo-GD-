@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, years, MESES_CORTOS } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, years, MESES_CORTOS, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "lluvias";
@@ -38,7 +38,14 @@ export function renderLluvias(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Registros cargados"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Registros cargados"),
+        buildExportButton(
+          "lluvias.xlsx", "Lluvias",
+          ["Fecha", "mm", "Usuario"],
+          () => items.map((it) => [fmtDate(it.fecha), it.mm ?? 0, it.usuario || ""])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "lluvias-table-wrap" }),
     ])
   );

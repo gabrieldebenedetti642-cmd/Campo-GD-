@@ -1,11 +1,12 @@
 import { listenSetting, setSetting } from "./db.js";
-import { fmtMoney, el, monthLabel } from "./utils.js";
+import { fmtMoney, el, monthLabel, buildExportButton } from "./utils.js";
 
 const SETTING_KEY = "flujoCaja";
 let sup = {
   ingresosArs: 1000000, egresosArs: 700000, ingresosUsd: 3000, egresosUsd: 1500,
   crecIngresos: 0, crecEgresos: 0, saldoArs: 0, saldoUsd: 0, mesInicio: todayFirstOfMonth(),
 };
+let lastRows = [];
 let unsub = null;
 let charts = {};
 
@@ -29,7 +30,14 @@ export function renderFlujoCaja(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Proyección mensual (24 meses)"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Proyección mensual (24 meses)"),
+        buildExportButton(
+          "flujo-de-caja.xlsx", "Flujo de Caja",
+          ["Mes", "Ingresos $", "Egresos $", "Flujo $", "Saldo $", "Ingresos USD", "Egresos USD", "Flujo USD", "Saldo USD"],
+          () => lastRows.map((r) => [r.mes, r.ingArs, r.egArs, r.flujoArs, r.saldoArs, r.ingUsd, r.egUsd, r.flujoUsd, r.saldoUsd])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "fc-table-wrap" }),
     ])
   );
@@ -139,6 +147,7 @@ function compute() {
       ingArs, egArs, flujoArs, saldoArs, ingUsd, egUsd, flujoUsd, saldoUsd,
     });
   }
+  lastRows = rows;
 
   const table = el("table", { class: "data-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [

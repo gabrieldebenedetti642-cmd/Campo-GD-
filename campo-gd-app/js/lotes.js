@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, daysBetween } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, daysBetween, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "lotes";
@@ -22,7 +22,27 @@ export function renderLotes(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Lotes cargados"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Lotes cargados"),
+        buildExportButton(
+          "lotes.xlsx", "Lotes",
+          ["ID Lote", "Categoría", "Cantidad", "Moneda", "Fecha compra", "Costo total", "Fecha venta",
+           "Ingreso total", "Margen", "Días", "GDP (kg/cab/día)", "Margen/cabeza", "Estado", "Usuario"],
+          () => items.map((it) => {
+            const c = calc(it);
+            return [
+              it.idLote || "", it.categoria || "", it.cantidad ?? 0, it.moneda || "$",
+              fmtDate(it.fechaCompra), c.costoTotal, it.fechaVenta ? fmtDate(it.fechaVenta) : "",
+              c.ingresoTotal === null ? "" : c.ingresoTotal,
+              c.margen === null ? "" : c.margen,
+              c.dias === null ? "" : c.dias,
+              c.gdp === null ? "" : Number(c.gdp.toFixed(3)),
+              c.margenCabeza === null ? "" : Number(c.margenCabeza.toFixed(1)),
+              c.estado, it.usuario || "",
+            ];
+          })
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "lotes-table-wrap" }),
     ])
   );

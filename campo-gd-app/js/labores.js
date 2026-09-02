@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, TIPOS_LABOR } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, TIPOS_LABOR, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "labores";
@@ -22,7 +22,17 @@ export function renderLabores(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Labores cargadas"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Labores cargadas"),
+        buildExportButton(
+          "labores.xlsx", "Labores",
+          ["Fecha", "Potrero", "Área (ha)", "Labor", "Horas", "Gasoil (L)", "Observaciones", "Usuario"],
+          () => items.map((it) => [
+            fmtDate(it.fecha), it.potrero || "", it.area ?? 0, it.labor || "",
+            it.horas ?? 0, it.gasoil ?? 0, it.observaciones || "", it.usuario || "",
+          ])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "labores-table-wrap" }),
     ])
   );

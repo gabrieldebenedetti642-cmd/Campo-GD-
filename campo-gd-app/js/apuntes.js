@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "apuntes";
@@ -19,7 +19,17 @@ export function renderApuntes(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Registros cargados"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Registros cargados"),
+        buildExportButton(
+          "apuntes.xlsx", "Apuntes",
+          ["Fecha", "Vehículo/Equipo", "Tipo", "Detalle", "Próximo control", "Observaciones", "Usuario"],
+          () => items.map((it) => [
+            fmtDate(it.fecha), it.vehiculo || "", it.tipo || "", it.detalle || "",
+            it.proximoControl ? fmtDate(it.proximoControl) : "", it.observaciones || "", it.usuario || "",
+          ])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "apuntes-table-wrap" }),
     ])
   );

@@ -1,10 +1,11 @@
 import { listenTo, listenSetting, setSetting } from "./db.js";
-import { fmtMoney, el, years, CATEGORIAS_EGRESO, toast } from "./utils.js";
+import { fmtMoney, el, years, CATEGORIAS_EGRESO, toast, buildExportButton } from "./utils.js";
 
 let ingresos = [];
 let egresos = [];
 let presupuesto = { egresosArs: {}, egresosUsd: {}, ingresosArs: 0, ingresosUsd: 0 };
 let selectedYear = new Date().getFullYear();
+let lastComparisonRows = [];
 let unsubIng = null, unsubEg = null, unsubPres = null;
 let charts = {};
 
@@ -43,7 +44,14 @@ export function renderPresupuesto(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Comparación"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Comparación"),
+        buildExportButton(
+          "presupuesto.xlsx", "Presupuesto vs Real",
+          ["Categoría", "Presupuesto $", "Real $", "Diferencia $", "Presupuesto USD", "Real USD", "Diferencia USD"],
+          () => lastComparisonRows
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "pres-table-wrap" }),
     ])
   );
@@ -168,6 +176,7 @@ function renderComparison() {
   ])));
   const tbody = el("tbody");
   const realArsArr = [], realUsdArr = [], presArsArr = [], presUsdArr = [];
+  const exportRows = [];
   let totPresArs = 0, totRealArs = 0, totPresUsd = 0, totRealUsd = 0;
   CATEGORIAS_EGRESO.forEach((cat) => {
     const presArs = (presupuesto.egresosArs && presupuesto.egresosArs[cat]) || 0;
@@ -179,6 +188,7 @@ function renderComparison() {
     totPresArs += presArs; totRealArs += realArs; totPresUsd += presUsd; totRealUsd += realUsd;
     presArsArr.push(presArs); realArsArr.push(realArs);
     presUsdArr.push(presUsd); realUsdArr.push(realUsd);
+    exportRows.push([cat, presArs, realArs, difArs, presUsd, realUsd, difUsd]);
     tbody.appendChild(el("tr", {}, [
       el("td", {}, cat),
       el("td", { class: "num" }, fmtMoney(presArs, "$")),
@@ -189,6 +199,7 @@ function renderComparison() {
       el("td", { class: "num " + (difUsd >= 0 ? "gdp-pos" : "gdp-neg") }, fmtMoney(difUsd, "USD")),
     ]));
   });
+  exportRows.push(["TOTAL EGRESOS", totPresArs, totRealArs, totPresArs - totRealArs, totPresUsd, totRealUsd, totPresUsd - totRealUsd]);
   tbody.appendChild(el("tr", { style: "font-weight:700;background:#F2F0E7" }, [
     el("td", {}, "TOTAL EGRESOS"),
     el("td", { class: "num" }, fmtMoney(totPresArs, "$")),
@@ -203,6 +214,7 @@ function renderComparison() {
   const realIngUsd = realTotal(ingresos, "USD");
   const difIngArs = realIngArs - (presupuesto.ingresosArs || 0);
   const difIngUsd = realIngUsd - (presupuesto.ingresosUsd || 0);
+  exportRows.push(["Ingresos totales", presupuesto.ingresosArs || 0, realIngArs, difIngArs, presupuesto.ingresosUsd || 0, realIngUsd, difIngUsd]);
   tbody.appendChild(el("tr", { style: "border-top:2px solid var(--green)" }, [
     el("td", {}, "Ingresos totales (+ = a favor)"),
     el("td", { class: "num" }, fmtMoney(presupuesto.ingresosArs || 0, "$")),
@@ -212,6 +224,8 @@ function renderComparison() {
     el("td", { class: "num" }, fmtMoney(realIngUsd, "USD")),
     el("td", { class: "num " + (difIngUsd >= 0 ? "gdp-pos" : "gdp-neg") }, fmtMoney(difIngUsd, "USD")),
   ]));
+
+  lastComparisonRows = exportRows;
 
   table.appendChild(tbody);
   wrap.innerHTML = "";
