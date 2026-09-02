@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CONCEPTOS_INGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue } from "./utils.js";
+import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CONCEPTOS_INGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue, buildExportButton } from "./utils.js";
 import { buildScannerPanel } from "./facturaScanner.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
@@ -40,7 +40,17 @@ export function renderIngresos(container) {
   container.appendChild(formPanel);
 
   const tablePanel = el("div", { class: "panel" }, [
-    el("h2", {}, "Facturas cargadas"),
+    el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+      el("h2", {}, "Facturas cargadas"),
+      buildExportButton(
+        "ingresos.xlsx", "Ingresos",
+        ["Fecha", "N° Factura", "Concepto", "Cliente", "Moneda", "Monto", "Usuario"],
+        () => items.map((it) => [
+          fmtDate(it.fecha), it.factura || "", it.concepto || "", it.cliente || "",
+          it.moneda || "$", it.monto || 0, it.usuario || "",
+        ])
+      ),
+    ]),
     el("div", { class: "table-wrap", id: "ingresos-table-wrap" }),
   ]);
   container.appendChild(tablePanel);

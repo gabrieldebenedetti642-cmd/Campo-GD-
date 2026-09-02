@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, INSUMOS_SANIDAD } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, INSUMOS_SANIDAD, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "sanidad";
@@ -38,7 +38,17 @@ export function renderSanidad(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Tratamientos cargados"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Tratamientos cargados"),
+        buildExportButton(
+          "sanidad.xlsx", "Sanidad",
+          ["Fecha", "Potrero", "Categoría", "Cantidad", "Insumos", "Observaciones", "Usuario"],
+          () => items.map((it) => [
+            fmtDate(it.fecha), it.potrero || "", it.categoria || "", it.cantidad ?? 0,
+            (it.insumos || []).join(", "), it.observaciones || "", it.usuario || "",
+          ])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "sanidad-table-wrap" }),
     ])
   );

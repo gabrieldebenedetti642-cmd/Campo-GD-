@@ -11,11 +11,13 @@ import { renderFlujoCaja, unmountFlujoCaja } from "./flujocaja.js";
 import { renderPresupuesto, unmountPresupuesto } from "./presupuesto.js";
 import { renderEscenarios, unmountEscenarios } from "./escenarios.js";
 import { renderSanidad, unmountSanidad } from "./sanidad.js";
+import { renderCalendario, unmountCalendario } from "./calendario.js";
 import { modoLocal, estaConectado } from "./db.js";
 import { ensureUsuario, buildUsuarioPill } from "./usuario.js";
 
 const views = {
   dashboard: { render: renderDashboard, unmount: unmountDashboard, label: "Dashboard" },
+  calendario: { render: renderCalendario, unmount: unmountCalendario, label: "Calendario" },
   ingresos: { render: renderIngresos, unmount: unmountIngresos, label: "Ingresos" },
   egresos: { render: renderEgresos, unmount: unmountEgresos, label: "Egresos" },
   flujocaja: { render: renderFlujoCaja, unmount: unmountFlujoCaja, label: "Flujo de Caja" },
@@ -31,7 +33,7 @@ const views = {
 };
 
 const GRUPOS_NAV = [
-  { label: "", keys: ["dashboard"] },
+  { label: "", keys: ["dashboard", "calendario"] },
   { label: "Contabilidad", keys: ["ingresos", "egresos", "flujocaja", "presupuesto", "escenarios"] },
   { label: "Hacienda y campo", keys: ["pesadas", "existencias", "lotes", "sanidad"] },
   { label: "Campo", keys: ["lluvias", "labores", "apuntes"] },

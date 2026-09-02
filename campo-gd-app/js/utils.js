@@ -159,3 +159,53 @@ export function toast(msg, isErr = false) {
 export function confirmar(msg) {
   return window.confirm(msg);
 }
+
+// ---------- Exportar a Excel (SheetJS, cargado desde CDN la primera vez) ----------
+let xlsxPromise = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxPromise) return xlsxPromise;
+  xlsxPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error("No se pudo cargar el generador de Excel (revisá tu conexión a internet)"));
+    document.head.appendChild(script);
+  });
+  return xlsxPromise;
+}
+
+// headers: array de nombres de columna. rows: array de arrays con los valores de cada fila.
+export async function exportToExcel(filename, sheetName, headers, rows) {
+  const XLSX = await loadXLSX();
+  const data = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  XLSX.writeFile(wb, filename);
+}
+
+// Botón listo para insertar en cualquier módulo. getRows() se llama recién al
+// tocar el botón, así siempre exporta los datos más actuales.
+export function buildExportButton(filename, sheetName, headers, getRows) {
+  const btn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "⬇️ Exportar Excel");
+  btn.addEventListener("click", async () => {
+    const rows = getRows();
+    if (!rows || rows.length === 0) {
+      toast("Todavía no hay datos para exportar", true);
+      return;
+    }
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Generando...";
+    try {
+      await exportToExcel(filename, sheetName, headers, rows);
+    } catch (err) {
+      toast("No se pudo exportar: " + err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
+  });
+  return btn;
+}

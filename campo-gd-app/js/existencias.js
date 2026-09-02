@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, MOTIVOS_EXISTENCIAS } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_HACIENDA, MOTIVOS_EXISTENCIAS, buildExportButton } from "./utils.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
 const COL = "existencias";
@@ -43,7 +43,17 @@ export function renderExistencias(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Movimientos cargados"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Movimientos cargados"),
+        buildExportButton(
+          "existencias.xlsx", "Existencias",
+          ["Fecha", "Categoría", "Movimiento", "Motivo", "Cantidad", "Observaciones", "Usuario"],
+          () => items.map((it) => [
+            fmtDate(it.fecha), it.categoria || "", it.movimiento || "", it.motivo || "",
+            it.cantidad ?? 0, it.observaciones || "", it.usuario || "",
+          ])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "existencias-table-wrap" }),
     ])
   );
