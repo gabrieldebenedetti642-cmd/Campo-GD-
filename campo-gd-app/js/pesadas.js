@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtDate, todayISO, el, toast, confirmar, daysBetween } from "./utils.js";
+import { fmtDate, todayISO, el, toast, confirmar, daysBetween, buildExportButton } from "./utils.js";
 import { buildImportPanel } from "./importar.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
@@ -47,7 +47,18 @@ export function renderPesadas(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("h2", {}, "Pesadas cargadas"),
+      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
+        el("h2", {}, "Pesadas cargadas"),
+        buildExportButton(
+          "pesadas.xlsx", "Pesadas",
+          ["Fecha", "Caravana", "Peso (kg)", "GDP (kg/día)", "Usuario"],
+          () => items.map((it) => [
+            fmtDate(it.fecha), it.caravana || "", it.peso ?? 0,
+            it._gdp === null || it._gdp === undefined ? "" : Number(it._gdp.toFixed(3)),
+            it.usuario || "",
+          ])
+        ),
+      ]),
       el("div", { class: "table-wrap", id: "pesadas-table-wrap" }),
     ])
   );
