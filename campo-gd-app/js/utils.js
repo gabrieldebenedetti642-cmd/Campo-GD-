@@ -32,6 +32,13 @@ export const CONCEPTOS_EGRESO = [
   "Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"
 ];
 
+export const INSUMOS_SANIDAD = [
+  "Saguaypicida", "Marca", "IATF", "IATF dispositivos", "IATF retiro",
+  "Mancha y gangrena", "Nitroxinil", "Aftosa", "Clorsulon", "Cobre",
+  "Caravana mosca", "Brucelosis", "Ricoverm", "Leptospira", "Carbuman",
+  "Reproductiva", "Inseminación", "Ecografías", "Pesaje", "Otro"
+];
+
 export function fmtMoney(n, moneda) {
   const num = Number(n) || 0;
   const abs = Math.abs(num).toLocaleString("es-AR", { maximumFractionDigits: 0 });
