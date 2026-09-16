@@ -538,6 +538,29 @@ table.rain-grid tr.total-row td {
   text-align: right;
 }
 
+.scan-ocr-fields { display: flex; flex-direction: column; gap: 4px; }
+.scan-ocr-fields .field { margin-bottom: 2px; }
+.chip-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+.chip-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--ink-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip-btn.active { background: var(--green); border-color: var(--green); color: #fff; }
+.chip-btn:hover:not(.active) { border-color: var(--gold); }
+
 @media (max-width: 640px) {
   main { padding: 16px 12px 50px; }
   .page-head h1 { font-size: 23px; }
