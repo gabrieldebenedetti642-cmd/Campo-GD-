@@ -22,6 +22,7 @@ export function renderEgresos(container) {
           if (parsed.monto) document.getElementById("eg-monto").value = parsed.monto;
           if (parsed.moneda) document.getElementById("eg-moneda").value = parsed.moneda;
           if (parsed.comprobante) document.getElementById("eg-comprobante").value = parsed.comprobante;
+          if (parsed.proveedor) document.getElementById("eg-proveedor").value = parsed.proveedor;
           document.getElementById("eg-fecha").scrollIntoView({ behavior: "smooth", block: "center" });
         },
       }),

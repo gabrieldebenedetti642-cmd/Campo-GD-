@@ -27,6 +27,7 @@ export function renderIngresos(container) {
         if (parsed.monto) document.getElementById("ing-monto").value = parsed.monto;
         if (parsed.moneda) document.getElementById("ing-moneda").value = parsed.moneda;
         if (parsed.comprobante) document.getElementById("ing-factura").value = parsed.comprobante;
+        if (parsed.proveedor) document.getElementById("ing-cliente").value = parsed.proveedor;
         document.getElementById("ing-fecha").scrollIntoView({ behavior: "smooth", block: "center" });
       },
     }),
