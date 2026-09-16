@@ -6,9 +6,10 @@ let egresos = [];
 let pesadas = [];
 let existencias = [];
 let potreros = [];
+let lotes = [];
 let cotizacion = 1000;
 let selectedYear = new Date().getFullYear();
-let unsubIng = null, unsubEg = null, unsubCotiz = null, unsubPesadas = null, unsubExistencias = null, unsubPotreros = null;
+let unsubIng = null, unsubEg = null, unsubCotiz = null, unsubPesadas = null, unsubExistencias = null, unsubPotreros = null, unsubLotes = null;
 let charts = {};
 
 const YEAR_MIN = 2026, YEAR_MAX = 2035;
@@ -30,6 +31,8 @@ export function renderDashboard(container) {
           onchange: (e) => {
             selectedYear = parseInt(e.target.value, 10);
             recompute();
+            recomputeHacienda();
+            recomputeComercial();
           },
           html: yearOptions,
         }),
@@ -51,6 +54,7 @@ export function renderDashboard(container) {
             cotizacion = v;
             await setSetting("cotizacion_usd", v);
             recompute();
+            recomputeComercial();
             toast("Cotización actualizada");
           },
         }),
@@ -64,6 +68,15 @@ export function renderDashboard(container) {
     el("div", { class: "panel" }, [
       el("h2", {}, "Hacienda"),
       el("div", { class: "kpi-grid", id: "dash-hacienda-kpis" }),
+    ])
+  );
+
+  container.appendChild(
+    el("div", { class: "panel" }, [
+      el("h2", {}, "Comercialización"),
+      el("div", { class: "kpi-grid", id: "dash-comercial-kpis" }),
+      el("p", { class: "sub", style: "margin-top:10px" },
+        "Todo convertido a USD con la cotización de arriba, para poder comparar. Compra: lotes comprados en el año. Venta: lotes vendidos en el año (aunque se hayan comprado antes)."),
     ])
   );
 
@@ -109,6 +122,7 @@ export function renderDashboard(container) {
       if (inp) inp.value = v;
     }
     recompute();
+    recomputeComercial();
   });
   unsubPesadas = listenTo("pesadas", (data) => {
     pesadas = data;
@@ -122,6 +136,10 @@ export function renderDashboard(container) {
     potreros = data;
     recomputeHacienda();
   });
+  unsubLotes = listenTo("lotes", (data) => {
+    lotes = data;
+    recomputeComercial();
+  });
 }
 
 export function unmountDashboard() {
@@ -131,6 +149,7 @@ export function unmountDashboard() {
   if (unsubPesadas) unsubPesadas();
   if (unsubExistencias) unsubExistencias();
   if (unsubPotreros) unsubPotreros();
+  if (unsubLotes) unsubLotes();
   Object.values(charts).forEach((c) => c && c.destroy());
   charts = {};
 }
@@ -221,6 +240,45 @@ function recomputeHacienda() {
   wrap.appendChild(kpiCard("Hectáreas totales", haTotal.toFixed(1)));
   wrap.appendChild(kpiCard("Carga ganadera (UG/ha)", cargaUG.toFixed(2), false, `${ugTotal.toFixed(1)} UG totales`));
   wrap.appendChild(kpiCard("Ganancia diaria promedio", gdpProm.toFixed(3) + " kg/día", gdpProm < 0));
+}
+
+// Convierte un monto a USD usando la cotización, según la moneda original.
+function aUSD(monto, moneda, cotiz) {
+  if (moneda === "USD") return monto;
+  return cotiz > 0 ? monto / cotiz : 0;
+}
+
+function recomputeComercial() {
+  const wrap = document.getElementById("dash-comercial-kpis");
+  if (!wrap) return;
+
+  const lotesCompra = lotes.filter((l) => (l.fechaCompra || "").startsWith(String(selectedYear)));
+  const lotesVenta = lotes.filter((l) => l.fechaVenta && l.fechaVenta.startsWith(String(selectedYear)) && l.kgVenta > 0);
+
+  const kgCompraTotal = lotesCompra.reduce((s, l) => s + (l.kgCompra || 0), 0);
+  const cabezasCompraTotal = lotesCompra.reduce((s, l) => s + (l.cantidad || 0), 0);
+  const costoUSDTotal = lotesCompra.reduce(
+    (s, l) => s + aUSD((l.kgCompra || 0) * (l.precioCompra || 0), l.moneda, cotizacion), 0
+  );
+
+  const kgVentaTotal = lotesVenta.reduce((s, l) => s + (l.kgVenta || 0), 0);
+  const cabezasVentaTotal = lotesVenta.reduce((s, l) => s + (l.cantidad || 0), 0);
+  const ingresoUSDTotal = lotesVenta.reduce(
+    (s, l) => s + aUSD((l.kgVenta || 0) * (l.precioVenta || 0), l.moneda, cotizacion), 0
+  );
+
+  const precioCompraUSD = kgCompraTotal > 0 ? costoUSDTotal / kgCompraTotal : 0;
+  const precioVentaUSD = kgVentaTotal > 0 ? ingresoUSDTotal / kgVentaTotal : 0;
+  const kgPromCompra = cabezasCompraTotal > 0 ? kgCompraTotal / cabezasCompraTotal : 0;
+  const kgPromVenta = cabezasVentaTotal > 0 ? kgVentaTotal / cabezasVentaTotal : 0;
+  const margenUSD = precioVentaUSD - precioCompraUSD;
+
+  wrap.innerHTML = "";
+  wrap.appendChild(kpiCard("Precio promedio compra (USD/kg)", precioCompraUSD.toFixed(2)));
+  wrap.appendChild(kpiCard("Precio promedio venta (USD/kg)", precioVentaUSD.toFixed(2)));
+  wrap.appendChild(kpiCard("Margen promedio (USD/kg)", margenUSD.toFixed(2), margenUSD < 0));
+  wrap.appendChild(kpiCard("Kg promedio de compra (x cab.)", kgPromCompra.toFixed(1)));
+  wrap.appendChild(kpiCard("Kg promedio de venta (x cab.)", kgPromVenta.toFixed(1)));
 }
 
 function monthlyTotals(list, year, currencyFilter) {
