@@ -43,8 +43,8 @@ export const CONCEPTOS_EGRESO = [
   "Sueldo / Jornal", "Changa / Contratista",
   "Alambre / Postes / Tranqueras", "Herramientas", "Semillas", "Agroquímicos",
   "Impuesto inmobiliario", "Impuesto a las ganancias", "Otro impuesto",
-  "Reparación de maquinaria", "Reparación de instalaciones", "Service de vehículo",
-  "Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"
+  "Reparación de maquinaria", "Reparación de instalaciones", "Mantenimiento de casas",
+  "Service de vehículo", "Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"
 ];
 
 export function fmtMoney(n, moneda) {
