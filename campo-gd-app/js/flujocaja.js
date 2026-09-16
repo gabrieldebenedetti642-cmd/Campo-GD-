@@ -169,8 +169,8 @@ function compute() {
 
 function drawCharts(rows) {
   const labels = rows.map((r) => r.mes);
-  makeLine("chart-fc-ars", labels, "Saldo acumulado ($ ARS)", rows.map((r) => r.saldoArs), "#1B5E20");
-  makeLine("chart-fc-usd", labels, "Saldo acumulado (USD)", rows.map((r) => r.saldoUsd), "#C9A227");
+  makeLine("chart-fc-ars", labels, "Saldo acumulado proyectado ($)", rows.map((r) => r.saldoArs), "#1B5E20");
+  makeLine("chart-fc-usd", labels, "Saldo acumulado proyectado (USD)", rows.map((r) => r.saldoUsd), "#C9A227");
 }
 
 function makeLine(id, labels, label, data, color) {

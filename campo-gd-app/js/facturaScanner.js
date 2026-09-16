@@ -180,6 +180,12 @@ export function extraerCandidatosImporte(texto) {
   return parsed.slice(0, 6);
 }
 
+// En Uruguay una factura es en pesos ($) o en dólares (U$S/USD/US$) — buscamos
+// esas marcas en el texto para sugerir la moneda correcta (el QR no siempre la trae).
+export function detectarMonedaUSD(texto) {
+  return /\bUSD\b|U\$\s?S|US\$|D[OÓ]LARES/i.test(texto || "");
+}
+
 export function extraerFecha(texto) {
   const m = texto.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (!m) return "";
@@ -278,41 +284,73 @@ export function buildScannerPanel({ onData }) {
     status.textContent = "Listo. Revisá los campos (sobre todo los que vinieron de una sugerencia) y guardá.";
   }
 
-  function mostrarTarjetaQR(parsed) {
+  function mostrarTarjetaQR(parsed, file) {
     reviewWrap.innerHTML = "";
-    const filas = [
-      ["Fecha", fmtFechaLarga(parsed.fecha) || "(no encontrada)"],
-      ["Monto", parsed.monto ? `${parsed.moneda} ${parsed.monto.toLocaleString("es-AR")}` : "(no encontrado)"],
-      ["N° Comprobante", parsed.comprobante || "(no encontrado)"],
-    ];
-    if (parsed.cuit) filas.push(["RUC/CUIT emisor", parsed.cuit]);
+    const actual = { ...parsed };
+
+    const filaFecha = el("div", { class: "scan-review-row" }, [
+      el("span", { class: "scan-review-label" }, "Fecha"),
+      el("span", { class: "scan-review-value" }, fmtFechaLarga(actual.fecha) || "(no encontrada)"),
+    ]);
+    const filaMonto = el("div", { class: "scan-review-row" }, [
+      el("span", { class: "scan-review-label" }, "Monto"),
+      el("span", { class: "scan-review-value" }, actual.monto ? actual.monto.toLocaleString("es-AR") : "(no encontrado)"),
+    ]);
+    const monedaSelect = el("select", {
+      class: "scan-moneda-select",
+      onchange: (e) => { actual.moneda = e.target.value; },
+    }, [el("option", { value: "$" }, "$ (pesos)"), el("option", { value: "USD" }, "U$S (dólares)")]);
+    monedaSelect.value = actual.moneda || "$";
+    const filaMoneda = el("div", { class: "scan-review-row" }, [
+      el("span", { class: "scan-review-label" }, "Moneda — revisá, esto no siempre viene en el QR"),
+      monedaSelect,
+    ]);
+    const filaComprobante = el("div", { class: "scan-review-row" }, [
+      el("span", { class: "scan-review-label" }, "N° Comprobante"),
+      el("span", { class: "scan-review-value" }, actual.comprobante || "(no encontrado)"),
+    ]);
+    const filas = [filaFecha, filaMonto, filaMoneda, filaComprobante];
+    if (actual.cuit) {
+      filas.push(el("div", { class: "scan-review-row" }, [
+        el("span", { class: "scan-review-label" }, "RUC emisor"),
+        el("span", { class: "scan-review-value" }, actual.cuit),
+      ]));
+    }
     const card = el("div", { class: "scan-review-card" }, [
       el("div", { class: "eyebrow" }, "QR leído — revisá y confirmá"),
-      el("div", { class: "scan-review-rows" }, filas.map(([label, val]) =>
-        el("div", { class: "scan-review-row" }, [
-          el("span", { class: "scan-review-label" }, label),
-          el("span", { class: "scan-review-value" }, val),
-        ])
-      )),
+      el("div", { class: "scan-review-rows" }, filas),
       el("div", { style: "display:flex; gap:8px; margin-top:12px; flex-wrap:wrap" }, [
         el("button", { class: "btn btn-primary", type: "button", id: "scan-confirm-btn" }, "✓ Usar estos datos"),
         el("button", { class: "btn btn-ghost", type: "button", id: "scan-discard-btn" }, "Descartar"),
       ]),
     ]);
     reviewWrap.appendChild(card);
-    document.getElementById("scan-confirm-btn").addEventListener("click", () => confirmarYCerrar(parsed));
+    document.getElementById("scan-confirm-btn").addEventListener("click", () => confirmarYCerrar(actual));
     document.getElementById("scan-discard-btn").addEventListener("click", () => {
       reviewWrap.innerHTML = "";
       status.textContent = "Descartado. Podés sacar la foto de nuevo cuando quieras.";
     });
+
+    // El QR no siempre trae la moneda — de paso leemos el texto en segundo
+    // plano para ver si dice USD / U$S, y si lo encontramos ajustamos el
+    // selector solo (el usuario igual lo puede cambiar a mano en cualquier momento).
+    if (file) {
+      leerTextoFactura(file).then((texto) => {
+        if (detectarMonedaUSD(texto) && monedaSelect.isConnected) {
+          monedaSelect.value = "USD";
+          actual.moneda = "USD";
+          toast("Detecté que la factura es en U$S — revisá igual");
+        }
+      }).catch(() => { /* si falla, el usuario ya puede elegir la moneda a mano */ });
+    }
   }
 
-  function mostrarTarjetaOCR({ fecha, importes, proveedores, comprobantes }) {
+  function mostrarTarjetaOCR({ fecha, importes, proveedores, comprobantes, moneda }) {
     reviewWrap.innerHTML = "";
     const actual = {
       fecha: fecha || "",
       monto: importes[0] ? importes[0].valor : 0,
-      moneda: "$",
+      moneda: moneda || "$",
       comprobante: comprobantes[0] || "",
       proveedor: proveedores[0] || "",
     };
@@ -371,8 +409,9 @@ export function buildScannerPanel({ onData }) {
       el("label", {}, "Moneda"),
       el("select", {
         onchange: (e) => { actual.moneda = e.target.value; },
-      }, [el("option", { value: "$" }, "$"), el("option", { value: "USD" }, "USD")]),
+      }, [el("option", { value: "$" }, "$ (pesos)"), el("option", { value: "USD" }, "U$S (dólares)")]),
     ]);
+    fMoneda.querySelector("select").value = actual.moneda;
 
     const card = el("div", { class: "scan-review-card" }, [
       el("div", { class: "eyebrow" }, "No encontré QR — esto es lo que leí en el texto. Revisá antes de confirmar:"),
@@ -403,12 +442,13 @@ export function buildScannerPanel({ onData }) {
       const proveedores = extraerCandidatosProveedor(texto);
       const comprobantes = extraerCandidatoComprobante(texto);
       const fecha = extraerFecha(texto);
+      const moneda = detectarMonedaUSD(texto) ? "USD" : "$";
       if (!importes.length && !proveedores.length && !comprobantes.length) {
         status.textContent = "No pude leer nada útil en la foto. Probá con más luz, de frente y sin que tiemble, o cargá los datos a mano.";
         return;
       }
       status.textContent = "";
-      mostrarTarjetaOCR({ fecha, importes, proveedores, comprobantes });
+      mostrarTarjetaOCR({ fecha, importes, proveedores, comprobantes, moneda });
     } catch (err) {
       status.textContent = "No se pudo leer el texto de la factura: " + err.message;
     } finally {
@@ -431,7 +471,7 @@ export function buildScannerPanel({ onData }) {
         if (tieneAlgoUtil(parsed)) {
           setScanning(false);
           status.textContent = "";
-          mostrarTarjetaQR(parsed);
+          mostrarTarjetaQR(parsed, file);
           return;
         }
       }

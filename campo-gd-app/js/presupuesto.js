@@ -217,7 +217,7 @@ function renderComparison() {
   wrap.innerHTML = "";
   wrap.appendChild(table);
 
-  makeBar("chart-pres-ars", CATEGORIAS_EGRESO, "Presupuesto vs Real ($ ARS)",
+  makeBar("chart-pres-ars", CATEGORIAS_EGRESO, "Presupuesto vs Real ($)",
     [{ label: "Presupuesto", data: presArsArr, backgroundColor: "#C9A227" },
      { label: "Real", data: realArsArr, backgroundColor: "#1B5E20" }]);
   makeBar("chart-pres-usd", CATEGORIAS_EGRESO, "Presupuesto vs Real (USD)",
