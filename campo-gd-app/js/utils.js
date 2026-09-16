@@ -10,6 +10,21 @@ export const CATEGORIAS_HACIENDA = [
 
 export const MOTIVOS_EXISTENCIAS = ["Nacimiento", "Compra", "Cambio de categoría", "Venta", "Muerte", "Otro"];
 
+// Equivalencia en Unidad Ganadera (UG) por categoría — 1 UG = una vaca de
+// ~380-400 kg que gesta y desteta un ternero. Tabla basada en Cocimano et al.
+// (1975), la referencia clásica usada en Argentina/Uruguay para carga animal.
+export const UG_POR_CATEGORIA = {
+  "Vacas de cría": 1.0,
+  "Vacas descarte": 1.0,
+  "Novillos 1-2": 0.7,
+  "Novillos 2-3": 1.0,
+  "Vaquillonas 1-2": 0.7,
+  "Vaquillonas 2-3": 1.0,
+  "Terneros": 0.4,
+  "Terneras": 0.4,
+  "Toros": 1.2,
+};
+
 export const TIPOS_LABOR = ["Siembra", "Fertilización", "Movimiento de tierra", "Pulverización", "Rotativa", "Otro"];
 
 export const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -30,13 +45,6 @@ export const CONCEPTOS_EGRESO = [
   "Impuesto inmobiliario", "Impuesto a las ganancias", "Otro impuesto",
   "Reparación de maquinaria", "Reparación de instalaciones", "Service de vehículo",
   "Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"
-];
-
-export const INSUMOS_SANIDAD = [
-  "Saguaypicida", "Marca", "IATF", "IATF dispositivos", "IATF retiro",
-  "Mancha y gangrena", "Nitroxinil", "Aftosa", "Clorsulon", "Cobre",
-  "Caravana mosca", "Brucelosis", "Ricoverm", "Leptospira", "Carbuman",
-  "Reproductiva", "Inseminación", "Ecografías", "Pesaje", "Otro"
 ];
 
 export function fmtMoney(n, moneda) {
@@ -158,54 +166,4 @@ export function toast(msg, isErr = false) {
 
 export function confirmar(msg) {
   return window.confirm(msg);
-}
-
-// ---------- Exportar a Excel (SheetJS, cargado desde CDN la primera vez) ----------
-let xlsxPromise = null;
-function loadXLSX() {
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  if (xlsxPromise) return xlsxPromise;
-  xlsxPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-    script.onload = () => resolve(window.XLSX);
-    script.onerror = () => reject(new Error("No se pudo cargar el generador de Excel (revisá tu conexión a internet)"));
-    document.head.appendChild(script);
-  });
-  return xlsxPromise;
-}
-
-// headers: array de nombres de columna. rows: array de arrays con los valores de cada fila.
-export async function exportToExcel(filename, sheetName, headers, rows) {
-  const XLSX = await loadXLSX();
-  const data = [headers, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  XLSX.writeFile(wb, filename);
-}
-
-// Botón listo para insertar en cualquier módulo. getRows() se llama recién al
-// tocar el botón, así siempre exporta los datos más actuales.
-export function buildExportButton(filename, sheetName, headers, getRows) {
-  const btn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "⬇️ Exportar Excel");
-  btn.addEventListener("click", async () => {
-    const rows = getRows();
-    if (!rows || rows.length === 0) {
-      toast("Todavía no hay datos para exportar", true);
-      return;
-    }
-    const textoOriginal = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Generando...";
-    try {
-      await exportToExcel(filename, sheetName, headers, rows);
-    } catch (err) {
-      toast("No se pudo exportar: " + err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = textoOriginal;
-    }
-  });
-  return btn;
 }

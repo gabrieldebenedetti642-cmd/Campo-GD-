@@ -1,14 +1,14 @@
 import { listenTo, listenSetting, setSetting } from "./db.js";
-import { fmtMoney, el, monthLabel, years, CATEGORIAS_EGRESO, CATEGORIAS_HACIENDA, daysBetween, toast } from "./utils.js";
+import { fmtMoney, el, monthLabel, years, daysBetween, CATEGORIAS_EGRESO, CATEGORIAS_HACIENDA, UG_POR_CATEGORIA, toast } from "./utils.js";
 
 let ingresos = [];
 let egresos = [];
-let existenciasItems = [];
-let potreros = [];
 let pesadas = [];
+let existencias = [];
+let potreros = [];
 let cotizacion = 1000;
 let selectedYear = new Date().getFullYear();
-let unsubIng = null, unsubEg = null, unsubCotiz = null, unsubExistencias = null, unsubPotreros = null, unsubPesadas = null;
+let unsubIng = null, unsubEg = null, unsubCotiz = null, unsubPesadas = null, unsubExistencias = null, unsubPotreros = null;
 let charts = {};
 
 const YEAR_MIN = 2026, YEAR_MAX = 2035;
@@ -62,6 +62,13 @@ export function renderDashboard(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
+      el("h2", {}, "Hacienda"),
+      el("div", { class: "kpi-grid", id: "dash-hacienda-kpis" }),
+    ])
+  );
+
+  container.appendChild(
+    el("div", { class: "panel" }, [
       el("h2", {}, "Ingresos vs Egresos por mes"),
       el("div", { class: "chart-grid" }, [
         el("div", { class: "chart-box" }, el("canvas", { id: "chart-ie-ars" })),
@@ -83,9 +90,9 @@ export function renderDashboard(container) {
   if (unsubIng) unsubIng();
   if (unsubEg) unsubEg();
   if (unsubCotiz) unsubCotiz();
+  if (unsubPesadas) unsubPesadas();
   if (unsubExistencias) unsubExistencias();
   if (unsubPotreros) unsubPotreros();
-  if (unsubPesadas) unsubPesadas();
 
   unsubIng = listenTo("ingresos", (data) => {
     ingresos = data;
@@ -103,17 +110,17 @@ export function renderDashboard(container) {
     }
     recompute();
   });
+  unsubPesadas = listenTo("pesadas", (data) => {
+    pesadas = data;
+    recomputeHacienda();
+  });
   unsubExistencias = listenTo("existencias", (data) => {
-    existenciasItems = data;
-    recompute();
+    existencias = data;
+    recomputeHacienda();
   });
   unsubPotreros = listenTo("potreros", (data) => {
     potreros = data;
-    recompute();
-  });
-  unsubPesadas = listenTo("pesadas", (data) => {
-    pesadas = data;
-    recompute();
+    recomputeHacienda();
   });
 }
 
@@ -121,9 +128,9 @@ export function unmountDashboard() {
   if (unsubIng) unsubIng();
   if (unsubEg) unsubEg();
   if (unsubCotiz) unsubCotiz();
+  if (unsubPesadas) unsubPesadas();
   if (unsubExistencias) unsubExistencias();
   if (unsubPotreros) unsubPotreros();
-  if (unsubPesadas) unsubPesadas();
   Object.values(charts).forEach((c) => c && c.destroy());
   charts = {};
 }
@@ -136,25 +143,46 @@ function inYear(item, y) {
   return (item.fecha || "").startsWith(String(y));
 }
 
-// Stock actual total (cabezas), misma cuenta que usa el módulo Existencias.
-function computeStockTotal(items) {
-  return CATEGORIAS_HACIENDA.reduce((sum, cat) => {
-    const deCat = items.filter((i) => i.categoria === cat);
-    const entradas = deCat.filter((i) => i.movimiento === "Entrada").reduce((s, i) => s + (i.cantidad || 0), 0);
-    const salidas = deCat.filter((i) => i.movimiento === "Salida").reduce((s, i) => s + (i.cantidad || 0), 0);
-    return sum + (entradas - salidas);
-  }, 0);
+function recompute() {
+  const kpisEl = document.getElementById("dash-kpis");
+  if (!kpisEl) return;
+
+  const ingY = ingresos.filter((i) => inYear(i, selectedYear));
+  const egY = egresos.filter((e) => inYear(e, selectedYear));
+
+  const ingArs = sumBy(ingY, (i) => i.moneda !== "USD");
+  const ingUsd = sumBy(ingY, (i) => i.moneda === "USD");
+  const egArs = sumBy(egY, (e) => e.moneda !== "USD");
+  const egUsd = sumBy(egY, (e) => e.moneda === "USD");
+  const balArs = ingArs - egArs;
+  const balUsd = ingUsd - egUsd;
+  const balConsolidado = balArs + balUsd * cotizacion;
+
+  kpisEl.innerHTML = "";
+  kpisEl.appendChild(kpiCard("Ingresos $", fmtMoney(ingArs, "$")));
+  kpisEl.appendChild(kpiCard("Egresos $", fmtMoney(egArs, "$")));
+  kpisEl.appendChild(kpiCard("Ingresos USD", fmtMoney(ingUsd, "USD")));
+  kpisEl.appendChild(kpiCard("Egresos USD", fmtMoney(egUsd, "USD")));
+  kpisEl.appendChild(kpiCard("Balance $", fmtMoney(balArs, "$"), balArs < 0));
+  kpisEl.appendChild(kpiCard("Balance USD", fmtMoney(balUsd, "USD"), balUsd < 0));
+  kpisEl.appendChild(kpiCard("Balance consolidado ($)", fmtMoney(balConsolidado, "$"), balConsolidado < 0, "usa la cotización de arriba"));
+
+  drawCharts(ingY, egY);
 }
 
-function computeHaTotal(list) {
-  return list.reduce((s, p) => s + (p.hectareas || 0), 0);
+function kpiCard(label, value, neg = false, sub = "") {
+  return el("div", { class: "kpi-card" }, [
+    el("span", { class: "eyebrow" }, label),
+    el("div", { class: "value" + (neg ? " neg" : "") }, value),
+    sub ? el("div", { class: "sub" }, sub) : null,
+  ]);
 }
 
-// GDP promedio (kg/día) entre pesadas consecutivas de la misma caravana,
-// sobre el conjunto de pesadas ya filtrado por año.
-function computeGdpPromedio(pesadasList) {
+// GDP por pesada: compara cada pesada con la anterior de la misma caravana
+// (misma lógica que en Pesadas).
+function calcularGdpPromedio(lista) {
   const byCaravana = {};
-  pesadasList.forEach((it) => {
+  lista.forEach((it) => {
     if (!it.caravana) return;
     (byCaravana[it.caravana] = byCaravana[it.caravana] || []).push(it);
   });
@@ -166,67 +194,33 @@ function computeGdpPromedio(pesadasList) {
       if (dias > 0) gdps.push((arr[i].peso - arr[i - 1].peso) / dias);
     }
   });
-  if (!gdps.length) return 0;
-  return gdps.reduce((s, g) => s + g, 0) / gdps.length;
+  return gdps.length ? gdps.reduce((s, g) => s + g, 0) / gdps.length : 0;
 }
 
-function recompute() {
-  const kpisEl = document.getElementById("dash-kpis");
-  if (!kpisEl) return;
+function recomputeHacienda() {
+  const wrap = document.getElementById("dash-hacienda-kpis");
+  if (!wrap) return;
 
-  const ingY = ingresos.filter((i) => inYear(i, selectedYear));
-  const egY = egresos.filter((e) => inYear(e, selectedYear));
-  const pesadasY = pesadas.filter((p) => inYear(p, selectedYear));
+  const stockPorCategoria = {};
+  CATEGORIAS_HACIENDA.forEach((cat) => {
+    const deCat = existencias.filter((i) => i.categoria === cat);
+    const entradas = deCat.filter((i) => i.movimiento === "Entrada").reduce((s, i) => s + (i.cantidad || 0), 0);
+    const salidas = deCat.filter((i) => i.movimiento === "Salida").reduce((s, i) => s + (i.cantidad || 0), 0);
+    stockPorCategoria[cat] = entradas - salidas;
+  });
+  const stockTotal = Object.values(stockPorCategoria).reduce((s, v) => s + v, 0);
+  const ugTotal = CATEGORIAS_HACIENDA.reduce(
+    (s, cat) => s + stockPorCategoria[cat] * (UG_POR_CATEGORIA[cat] || 1), 0
+  );
+  const haTotal = potreros.reduce((s, p) => s + (p.hectareas || 0), 0);
+  const cargaUG = haTotal > 0 ? ugTotal / haTotal : 0;
+  const gdpProm = calcularGdpPromedio(pesadas);
 
-  const ingArs = sumBy(ingY, (i) => i.moneda !== "USD");
-  const ingUsd = sumBy(ingY, (i) => i.moneda === "USD");
-  const egArs = sumBy(egY, (e) => e.moneda !== "USD");
-  const egUsd = sumBy(egY, (e) => e.moneda === "USD");
-  const balArs = ingArs - egArs;
-  const balUsd = ingUsd - egUsd;
-  const balConsolidado = balArs + balUsd * cotizacion;
-
-  const stockTotal = computeStockTotal(existenciasItems);
-  const haTotal = computeHaTotal(potreros);
-  const gdpProm = computeGdpPromedio(pesadasY);
-  const kgProducidosAnio = gdpProm * 365 * stockTotal;
-  const kgProducidosHa = haTotal > 0 ? kgProducidosAnio / haTotal : 0;
-
-  const gastoSanidadArs = sumBy(egY, (e) => e.categoria === "Sanidad" && e.moneda !== "USD");
-  const gastoSanidadUsd = sumBy(egY, (e) => e.categoria === "Sanidad" && e.moneda === "USD");
-  const gastoSanidadConsolidado = gastoSanidadArs + gastoSanidadUsd * cotizacion;
-  const gastoSanidadPorAnimal = stockTotal > 0 ? gastoSanidadConsolidado / stockTotal : 0;
-
-  kpisEl.innerHTML = "";
-  kpisEl.appendChild(kpiCard("Ingresos $", fmtMoney(ingArs, "$")));
-  kpisEl.appendChild(kpiCard("Egresos $", fmtMoney(egArs, "$")));
-  kpisEl.appendChild(kpiCard("Ingresos USD", fmtMoney(ingUsd, "USD")));
-  kpisEl.appendChild(kpiCard("Egresos USD", fmtMoney(egUsd, "USD")));
-  kpisEl.appendChild(kpiCard("Balance $", fmtMoney(balArs, "$"), balArs < 0));
-  kpisEl.appendChild(kpiCard("Balance USD", fmtMoney(balUsd, "USD"), balUsd < 0));
-  kpisEl.appendChild(kpiCard("Balance consolidado ($)", fmtMoney(balConsolidado, "$"), balConsolidado < 0, "usa la cotización de arriba"));
-  kpisEl.appendChild(kpiCard(
-    "Kg producidos/ha (año)",
-    haTotal > 0 ? kgProducidosHa.toFixed(1) : "-",
-    false,
-    "estimado: GDP promedio × 365 × stock actual ÷ hectáreas"
-  ));
-  kpisEl.appendChild(kpiCard(
-    "Gasto Sanidad / animal",
-    stockTotal > 0 ? fmtMoney(gastoSanidadPorAnimal, "$") : "-",
-    false,
-    "gasto de categoría Sanidad del año (consolidado) sobre el stock actual"
-  ));
-
-  drawCharts(ingY, egY);
-}
-
-function kpiCard(label, value, neg = false, sub = "") {
-  return el("div", { class: "kpi-card" }, [
-    el("span", { class: "eyebrow" }, label),
-    el("div", { class: "value" + (neg ? " neg" : "") }, value),
-    sub ? el("div", { class: "sub" }, sub) : null,
-  ]);
+  wrap.innerHTML = "";
+  wrap.appendChild(kpiCard("Stock total (cabezas)", String(stockTotal)));
+  wrap.appendChild(kpiCard("Hectáreas totales", haTotal.toFixed(1)));
+  wrap.appendChild(kpiCard("Carga ganadera (UG/ha)", cargaUG.toFixed(2), false, `${ugTotal.toFixed(1)} UG totales`));
+  wrap.appendChild(kpiCard("Ganancia diaria promedio", gdpProm.toFixed(3) + " kg/día", gdpProm < 0));
 }
 
 function monthlyTotals(list, year, currencyFilter) {
