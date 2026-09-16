@@ -17,28 +17,49 @@ function loadJsQR() {
   return jsQrPromise;
 }
 
-function fileToImageData(file) {
+// Las fotos de celular (sobre todo iPhone) vienen con una etiqueta EXIF que
+// las "rota" al mostrarlas, pero si no se respeta esa rotación al dibujar en
+// el canvas, el QR queda de costado y el lector no lo reconoce. Por eso acá
+// pedimos explícitamente la orientación correcta al navegador.
+async function cargarImagenOrientada(file) {
+  if ("createImageBitmap" in window) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      // algún navegador viejo no soporta la opción — seguimos con el método de respaldo
+    }
+  }
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      // limitamos el lado más largo para que no sea lentísimo con fotos de 12MP+
-      const maxSide = 1600;
-      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("No se pudo abrir la imagen"));
-    };
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("No se pudo abrir la imagen")); };
     img.src = url;
   });
+}
+
+function dibujarEnCanvas(source, maxSide) {
+  const w = source.width, h = source.height;
+  const scale = maxSide ? Math.min(1, maxSide / Math.max(w, h)) : 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+// Prueba a distintas resoluciones — a veces una foto grande tiene el QR
+// chiquito y se lee mejor entero; a veces se lee mejor un poco reducida.
+async function buscarQR(file) {
+  const jsQR = await loadJsQR();
+  const source = await cargarImagenOrientada(file);
+  for (const maxSide of [1800, null, 1000]) {
+    const imageData = dibujarEnCanvas(source, maxSide);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+    if (code) return code;
+  }
+  return null;
 }
 
 // Decodifica el payload del QR de AFIP (URL con ?p=<base64 JSON>).
@@ -65,11 +86,19 @@ export function parseAfipQR(qrText) {
   }
 }
 
-// { onData(parsed) } — se llama cuando se detecta y decodifica un QR válido.
+function fmtFechaLarga(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+// { onData(parsed) } — se llama recién cuando el usuario confirma la tarjeta
+// con los datos leídos (no apenas se detecta el QR).
 export function buildScannerPanel({ onData }) {
   const wrap = el("div", { class: "scanner-panel" });
   const status = el("div", { class: "sub", style: "margin-top:8px" },
-    "Sacá una foto de la factura (o subí una) — si tiene el QR de AFIP, completamos fecha, monto, moneda y N° de comprobante solos.");
+    "Sacá la foto bien de cerca del cuadrado QR (que ocupe buena parte de la foto, con luz y de frente) — completamos fecha, monto, moneda y N° de comprobante solos.");
+  const reviewWrap = el("div", { id: "scan-review-wrap" });
 
   const inputCamera = el("input", {
     type: "file", accept: "image/*", capture: "environment", id: "scan-camera-input", style: "display:none",
@@ -82,18 +111,59 @@ export function buildScannerPanel({ onData }) {
   btnCamera.addEventListener("click", () => inputCamera.click());
   const btnFile = el("button", { class: "btn btn-ghost", type: "button" }, "Subir foto");
   btnFile.addEventListener("click", () => inputFile.click());
-
   const btnRow = el("div", { style: "display:flex; gap:8px; flex-wrap:wrap" }, [btnCamera, btnFile]);
+
+  function setScanning(isScanning) {
+    btnCamera.disabled = isScanning;
+    btnFile.disabled = isScanning;
+    btnCamera.textContent = isScanning ? "Leyendo…" : "📷 Sacar foto";
+  }
+
+  function mostrarTarjetaConfirmacion(parsed) {
+    reviewWrap.innerHTML = "";
+    const filas = [
+      ["Fecha", fmtFechaLarga(parsed.fecha) || "(no encontrada)"],
+      ["Monto", parsed.monto ? `${parsed.moneda} ${parsed.monto.toLocaleString("es-AR")}` : "(no encontrado)"],
+      ["N° Comprobante", parsed.comprobante || "(no encontrado)"],
+    ];
+    if (parsed.cuit) filas.push(["CUIT emisor", parsed.cuit]);
+
+    const card = el("div", { class: "scan-review-card" }, [
+      el("div", { class: "eyebrow" }, "QR leído — revisá y confirmá"),
+      el("div", { class: "scan-review-rows" }, filas.map(([label, val]) =>
+        el("div", { class: "scan-review-row" }, [
+          el("span", { class: "scan-review-label" }, label),
+          el("span", { class: "scan-review-value" }, val),
+        ])
+      )),
+      el("div", { style: "display:flex; gap:8px; margin-top:12px; flex-wrap:wrap" }, [
+        el("button", { class: "btn btn-primary", type: "button", id: "scan-confirm-btn" }, "✓ Usar estos datos"),
+        el("button", { class: "btn btn-ghost", type: "button", id: "scan-discard-btn" }, "Descartar"),
+      ]),
+    ]);
+    reviewWrap.appendChild(card);
+
+    document.getElementById("scan-confirm-btn").addEventListener("click", () => {
+      onData(parsed);
+      toast("Datos completados — revisá Concepto y Proveedor");
+      reviewWrap.innerHTML = "";
+      status.textContent = "Listo. Completá lo que falte (Concepto, Proveedor/Cliente) y guardá.";
+    });
+    document.getElementById("scan-discard-btn").addEventListener("click", () => {
+      reviewWrap.innerHTML = "";
+      status.textContent = "Descartado. Podés sacar la foto de nuevo cuando quieras.";
+    });
+  }
 
   async function handleFile(file) {
     if (!file) return;
-    status.textContent = "Leyendo la imagen...";
+    reviewWrap.innerHTML = "";
+    setScanning(true);
+    status.textContent = "Leyendo la imagen…";
     try {
-      const imageData = await fileToImageData(file);
-      const jsQR = await loadJsQR();
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      const code = await buscarQR(file);
       if (!code) {
-        status.textContent = "No encontré ningún QR en la foto. Probá con más luz o más de cerca, o cargá los datos a mano.";
+        status.textContent = "No encontré el QR. Probá de nuevo bien de cerca del cuadrado QR solo (no toda la hoja), con buena luz y sin reflejos — o cargá los datos a mano.";
         return;
       }
       const parsed = parseAfipQR(code.data);
@@ -101,11 +171,12 @@ export function buildScannerPanel({ onData }) {
         status.textContent = "Encontré un QR pero no tiene el formato de factura de AFIP. Cargá los datos a mano.";
         return;
       }
-      status.textContent = `Listo — factura ${parsed.comprobante || ""} del ${parsed.fecha}, ${parsed.moneda} ${parsed.monto}.`;
-      onData(parsed);
-      toast("Datos de la factura completados");
+      status.textContent = "";
+      mostrarTarjetaConfirmacion(parsed);
     } catch (err) {
       status.textContent = "No se pudo leer la foto: " + err.message;
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -116,5 +187,6 @@ export function buildScannerPanel({ onData }) {
   wrap.appendChild(inputCamera);
   wrap.appendChild(inputFile);
   wrap.appendChild(status);
+  wrap.appendChild(reviewWrap);
   return wrap;
 }
