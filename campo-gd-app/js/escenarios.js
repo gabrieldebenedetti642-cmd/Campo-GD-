@@ -1,11 +1,10 @@
 import { listenTo, listenSetting } from "./db.js";
-import { fmtMoney, el, years, buildExportButton } from "./utils.js";
+import { fmtMoney, el, years } from "./utils.js";
 
 let ingresos = [];
 let egresos = [];
 let cotizacion = 1000;
 let selectedYear = new Date().getFullYear();
-let lastGridRows = [];
 let unsubIng = null, unsubEg = null, unsubCotiz = null;
 
 const YEAR_MIN = 2026, YEAR_MAX = 2035;
@@ -41,14 +40,7 @@ export function renderEscenarios(container) {
 
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("div", { style: "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px" }, [
-        el("h2", {}, "Balance consolidado ($) según variación de precio de hacienda y cotización dólar"),
-        buildExportButton(
-          "escenarios.xlsx", "Escenarios",
-          ["Var. Precio hacienda (%)", "Var. Dólar (%)", "Balance consolidado ($)"],
-          () => lastGridRows
-        ),
-      ]),
+      el("h2", {}, "Balance consolidado ($) según variación de precio de hacienda y cotización dólar"),
       el("p", { class: "sub", style: "margin-bottom:10px" },
         "El precio de hacienda ajusta los Ingresos; los Egresos quedan fijos. La cotización ajusta el peso del Balance USD."),
       el("div", { class: "table-wrap", id: "esc-grid" }),
@@ -119,17 +111,14 @@ function compute() {
   const headRow = el("tr", {}, [el("th", {}, "Precio ↓ / Dólar →"), ...VARS.map((v) => el("th", {}, (v * 100).toFixed(0) + "%"))]);
   table.appendChild(el("thead", {}, headRow));
   const tbody = el("tbody");
-  const exportRows = [];
   VARS.forEach((pv) => {
     const tr = el("tr", {}, [el("td", { style: "font-weight:700;background:var(--green);color:#fff" }, (pv * 100).toFixed(0) + "%")]);
     VARS.forEach((dv) => {
       const val = balanceConsolidado(ingArs, egArs, ingUsd, egUsd, cotizacion, pv, dv);
-      exportRows.push([(pv * 100).toFixed(0) + "%", (dv * 100).toFixed(0) + "%", val]);
       tr.appendChild(el("td", { class: "num " + (val >= 0 ? "gdp-pos" : "gdp-neg") }, fmtMoney(val, "$")));
     });
     tbody.appendChild(tr);
   });
-  lastGridRows = exportRows;
   table.appendChild(tbody);
   gridWrap.innerHTML = "";
   gridWrap.appendChild(table);

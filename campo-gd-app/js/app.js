@@ -10,14 +10,11 @@ import { renderApuntes, unmountApuntes } from "./apuntes.js";
 import { renderFlujoCaja, unmountFlujoCaja } from "./flujocaja.js";
 import { renderPresupuesto, unmountPresupuesto } from "./presupuesto.js";
 import { renderEscenarios, unmountEscenarios } from "./escenarios.js";
-import { renderSanidad, unmountSanidad } from "./sanidad.js";
-import { renderCalendario, unmountCalendario } from "./calendario.js";
 import { modoLocal, estaConectado } from "./db.js";
 import { ensureUsuario, buildUsuarioPill } from "./usuario.js";
 
 const views = {
   dashboard: { render: renderDashboard, unmount: unmountDashboard, label: "Dashboard" },
-  calendario: { render: renderCalendario, unmount: unmountCalendario, label: "Calendario" },
   ingresos: { render: renderIngresos, unmount: unmountIngresos, label: "Ingresos" },
   egresos: { render: renderEgresos, unmount: unmountEgresos, label: "Egresos" },
   flujocaja: { render: renderFlujoCaja, unmount: unmountFlujoCaja, label: "Flujo de Caja" },
@@ -26,16 +23,15 @@ const views = {
   pesadas: { render: renderPesadas, unmount: unmountPesadas, label: "Pesadas" },
   existencias: { render: renderExistencias, unmount: unmountExistencias, label: "Existencias" },
   lotes: { render: renderLotes, unmount: unmountLotes, label: "Lotes de Ganado" },
-  sanidad: { render: renderSanidad, unmount: unmountSanidad, label: "Sanidad" },
   lluvias: { render: renderLluvias, unmount: unmountLluvias, label: "Lluvias" },
   labores: { render: renderLabores, unmount: unmountLabores, label: "Labores" },
   apuntes: { render: renderApuntes, unmount: unmountApuntes, label: "Apuntes" },
 };
 
 const GRUPOS_NAV = [
-  { label: "", keys: ["dashboard", "calendario"] },
+  { label: "", keys: ["dashboard"] },
   { label: "Contabilidad", keys: ["ingresos", "egresos", "flujocaja", "presupuesto", "escenarios"] },
-  { label: "Hacienda y campo", keys: ["pesadas", "existencias", "lotes", "sanidad"] },
+  { label: "Hacienda y campo", keys: ["pesadas", "existencias", "lotes"] },
   { label: "Campo", keys: ["lluvias", "labores", "apuntes"] },
 ];
 
