@@ -511,6 +511,33 @@ table.rain-grid tr.total-row td {
 }
 .import-panel .data-table { margin-top: 10px; }
 
+/* ---------- tarjeta de confirmación del escáner de factura ---------- */
+.scan-review-card {
+  margin-top: 14px;
+  background: #FCFBF8;
+  border: 1.5px solid var(--gold);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.scan-review-rows { margin-top: 8px; }
+.scan-review-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.scan-review-row:last-child { border-bottom: none; }
+.scan-review-label { font-size: 12.5px; color: var(--ink-muted); font-weight: 600; }
+.scan-review-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--green-dark);
+  text-align: right;
+}
+
 @media (max-width: 640px) {
   main { padding: 16px 12px 50px; }
   .page-head h1 { font-size: 23px; }
