@@ -88,13 +88,10 @@ export function parseAfipQR(qrText) {
     const moneda = monedaMap[(json.moneda || "").toUpperCase()] || "$";
     const ptoVta = json.ptoVta ? String(json.ptoVta).padStart(4, "0") : "";
     const nroCmp = json.nroCmp ? String(json.nroCmp).padStart(8, "0") : "";
-    return {
-      fecha: json.fecha || "",
-      monto: typeof json.importe === "number" ? json.importe : parseFloat(json.importe) || 0,
-      moneda,
-      comprobante: ptoVta && nroCmp ? `${ptoVta}-${nroCmp}` : "",
-      cuit: json.cuit ? String(json.cuit) : "",
-    };
+    const monto = typeof json.importe === "number" ? json.importe : parseFloat(json.importe) || 0;
+    const comprobante = ptoVta && nroCmp ? `${ptoVta}-${nroCmp}` : "";
+    if (!monto && !comprobante && !json.fecha) return null; // nada útil, mejor caer a OCR
+    return { fecha: json.fecha || "", monto, moneda, comprobante, cuit: json.cuit ? String(json.cuit) : "" };
   } catch {
     return null;
   }
@@ -102,27 +99,51 @@ export function parseAfipQR(qrText) {
 
 // Decodifica el QR de DGI Uruguay (e-Factura / CFE):
 // https://www.efactura.dgi.gub.uy/consultaQR/cfe?ruc,tipoCFE,serie,nroCFE,monto,fecha,hash
+// El portal de DGI está armado en GeneXus, que habitualmente pasa los
+// parámetros de forma posicional (separados por coma, sin "clave=valor")
+// en vez de query params con nombre — probamos ese formato primero, y el
+// de nombres como respaldo por si acaso. Si no logramos sacar ningún dato
+// útil, devolvemos null para que se pase solo a leer el texto de la
+// factura en vez de mostrar una tarjeta vacía.
 export function parseDgiUruguayQR(qrText) {
   try {
     const url = new URL(qrText);
-    if (!url.hostname.includes("efactura.dgi.gub.uy")) return null;
-    const p = url.searchParams;
-    const getAny = (...keys) => keys.map((k) => p.get(k)).find((v) => v) || "";
-    const serie = getAny("serie", "Serie");
-    const nro = getAny("nroCFE", "nro", "numero", "Nro");
-    const monto = parseFloat((getAny("monto", "importe", "Monto") || "0").replace(",", "."));
-    const fecha = getAny("fecha", "Fecha");
+    if (!url.hostname.includes("dgi.gub.uy")) return null;
+
+    const rawSearch = url.search.replace(/^\?/, "");
+    let ruc = "", serie = "", nro = "", montoStr = "", fecha = "";
+
+    // Formato posicional (lo más probable en un portal GeneXus): sin "="
+    if (rawSearch && !rawSearch.includes("=")) {
+      const partes = rawSearch.split(",");
+      if (partes.length >= 6) {
+        [ruc, , serie, nro, montoStr, fecha] = partes;
+      }
+    }
+
+    // Formato con parámetros nombrados, por si acaso
+    if (!serie && !nro && !montoStr) {
+      const p = url.searchParams;
+      const getAny = (...keys) => keys.map((k) => p.get(k)).find((v) => v) || "";
+      ruc = ruc || getAny("ruc", "RUC", "Ruc");
+      serie = getAny("serie", "Serie");
+      nro = getAny("nroCFE", "nro", "numero", "Nro", "nroCfe");
+      montoStr = getAny("monto", "importe", "Monto", "total");
+      fecha = getAny("fecha", "Fecha");
+    }
+
+    const monto = parseFloat((montoStr || "0").replace(",", "."));
     let fechaIso = "";
-    const m = fecha.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    const m = (fecha || "").match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (m) fechaIso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    else if (/^\d{4}-\d{2}-\d{2}/.test(fecha)) fechaIso = fecha.slice(0, 10);
-    return {
-      fecha: fechaIso,
-      monto,
-      moneda: "$",
-      comprobante: serie && nro ? `${serie}-${nro}` : "",
-      cuit: getAny("ruc", "RUC"),
-    };
+    else if (/^\d{4}-\d{2}-\d{2}/.test(fecha || "")) fechaIso = fecha.slice(0, 10);
+    else if (/^\d{8}$/.test(fecha || "")) fechaIso = `${fecha.slice(0, 4)}-${fecha.slice(4, 6)}-${fecha.slice(6, 8)}`;
+
+    const comprobante = serie && nro ? `${serie}-${nro}` : "";
+    // si no sacamos nada de provecho, mejor null que una tarjeta vacía
+    if (!monto && !comprobante && !fechaIso) return null;
+
+    return { fecha: fechaIso, monto, moneda: "$", comprobante, cuit: ruc || "" };
   } catch {
     return null;
   }
@@ -395,6 +416,10 @@ export function buildScannerPanel({ onData }) {
     }
   }
 
+  function tieneAlgoUtil(parsed) {
+    return !!(parsed && (parsed.monto || parsed.comprobante || parsed.fecha));
+  }
+
   async function handleFile(file) {
     if (!file) return;
     reviewWrap.innerHTML = "";
@@ -403,14 +428,14 @@ export function buildScannerPanel({ onData }) {
       const code = await buscarQR(file);
       if (code) {
         const parsed = parseComprobanteQR(code.data);
-        if (parsed) {
+        if (tieneAlgoUtil(parsed)) {
           setScanning(false);
           status.textContent = "";
           mostrarTarjetaQR(parsed);
           return;
         }
       }
-      // no hubo QR legible o no era un formato conocido -> pasar a OCR
+      // no hubo QR legible, o el QR no dio ningún dato útil -> pasar a OCR
       await intentarOCR(file);
     } catch (err) {
       status.textContent = "No se pudo leer la foto: " + err.message;
