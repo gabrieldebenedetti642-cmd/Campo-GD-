@@ -7,7 +7,7 @@ let items = [];
 let editingId = null;
 let unsub = null;
 let selectedYear = new Date().getFullYear();
-const YEAR_MIN = 2026, YEAR_MAX = 2035;
+const YEAR_MIN = 2026, YEAR_MAX = 2040;
 
 export function renderLluvias(container) {
   container.innerHTML = "";

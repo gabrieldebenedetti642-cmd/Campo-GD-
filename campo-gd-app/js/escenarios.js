@@ -7,7 +7,7 @@ let cotizacion = 1000;
 let selectedYear = new Date().getFullYear();
 let unsubIng = null, unsubEg = null, unsubCotiz = null;
 
-const YEAR_MIN = 2026, YEAR_MAX = 2035;
+const YEAR_MIN = 2026, YEAR_MAX = 2040;
 const VARS = [-0.20, -0.10, 0, 0.10, 0.20];
 
 export function renderEscenarios(container) {

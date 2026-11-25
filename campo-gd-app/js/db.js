@@ -2,6 +2,20 @@ import { firebaseConfig, FIREBASE_CONFIGURADO } from "./firebase-config.js";
 
 export const modoLocal = !FIREBASE_CONFIGURADO;
 
+// ------------------------------------------------------------
+// Varios campos: cada campo guarda sus datos en colecciones propias (se les antepone
+// un prefijo). El primer campo (id vacío) no lleva prefijo, así sus datos son los de
+// siempre. El resto de la app no se entera: sigue pidiendo "lotes", "ingresos", etc.
+// ------------------------------------------------------------
+let prefijo = "";
+export function setCampoActivo(id) {
+  prefijo = id ? `c-${id}-` : "";
+}
+// Lo que es de todos los campos por igual (no lleva prefijo): la lista de campos y el dólar.
+const SETTINGS_GLOBALES = new Set(["campos", "cotizacion_usd"]);
+const nomColeccion = (c) => prefijo + c;
+const nomSetting = (k) => (SETTINGS_GLOBALES.has(k) ? k : prefijo + k);
+
 let db = null;
 let fs = null; // funciones de firestore, cargadas dinámicamente solo si hace falta
 let initPromise = null;
@@ -106,6 +120,7 @@ function localListen(coleccion, callback) {
 // Nunca se cuelga: si Firestore no contesta rápido, usa el respaldo local.
 // ------------------------------------------------------------
 export async function addDocTo(coleccion, data) {
+  coleccion = nomColeccion(coleccion);
   if (await firestoreListo()) {
     return fs.addDoc(fs.collection(db, coleccion), data).then((ref) => ref.id);
   }
@@ -113,6 +128,7 @@ export async function addDocTo(coleccion, data) {
 }
 
 export async function updateDocIn(coleccion, id, data) {
+  coleccion = nomColeccion(coleccion);
   if (await firestoreListo()) {
     return fs.updateDoc(fs.doc(db, coleccion, id), data);
   }
@@ -120,6 +136,7 @@ export async function updateDocIn(coleccion, id, data) {
 }
 
 export async function deleteDocFrom(coleccion, id) {
+  coleccion = nomColeccion(coleccion);
   if (await firestoreListo()) {
     return fs.deleteDoc(fs.doc(db, coleccion, id));
   }
@@ -130,6 +147,7 @@ export async function deleteDocFrom(coleccion, id) {
 // dejar de escuchar (unsubscribe), disponible de inmediato aunque la
 // conexión a Firestore todavía se esté resolviendo.
 export function listenTo(coleccion, callback) {
+  coleccion = nomColeccion(coleccion);
   if (modoLocal) return localListen(coleccion, callback);
 
   let cancelado = false;
@@ -162,6 +180,7 @@ export function listenTo(coleccion, callback) {
 
 // settings: documento único por clave (ej. cotización dólar)
 export async function setSetting(key, value) {
+  key = nomSetting(key);
   if (await firestoreListo()) {
     return fs.setDoc(fs.doc(db, "settings", key), { value }, { merge: true });
   }
@@ -172,6 +191,7 @@ export async function setSetting(key, value) {
 }
 
 export function listenSetting(key, callback) {
+  key = nomSetting(key);
   if (modoLocal) return listenSettingLocal(key, callback);
 
   let cancelado = false;

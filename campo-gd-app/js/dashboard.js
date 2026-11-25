@@ -12,7 +12,7 @@ let selectedYear = new Date().getFullYear();
 let unsubIng = null, unsubEg = null, unsubCotiz = null, unsubPesadas = null, unsubExistencias = null, unsubPotreros = null, unsubLotes = null;
 let charts = {};
 
-const YEAR_MIN = 2026, YEAR_MAX = 2035;
+const YEAR_MIN = 2026, YEAR_MAX = 2040;
 
 export function renderDashboard(container) {
   container.innerHTML = "";
@@ -76,7 +76,7 @@ export function renderDashboard(container) {
       el("h2", {}, "Comercialización"),
       el("div", { class: "kpi-grid", id: "dash-comercial-kpis" }),
       el("p", { class: "sub", style: "margin-top:10px" },
-        "Todo convertido a USD con la cotización de arriba, para poder comparar. Compra: lotes comprados en el año. Venta: lotes vendidos en el año (aunque se hayan comprado antes)."),
+        "Todo convertido a USD con la cotización de arriba, para poder comparar. Compra: lotes comprados en el año. Venta: lotes vendidos en el año (aunque se hayan comprado antes). Los precios ya incluyen las comisiones de intermediario: la de compra se suma al costo y la de venta se resta al ingreso."),
     ])
   );
 
@@ -258,13 +258,13 @@ function recomputeComercial() {
   const kgCompraTotal = lotesCompra.reduce((s, l) => s + (l.kgCompra || 0), 0);
   const cabezasCompraTotal = lotesCompra.reduce((s, l) => s + (l.cantidad || 0), 0);
   const costoUSDTotal = lotesCompra.reduce(
-    (s, l) => s + aUSD((l.kgCompra || 0) * (l.precioCompra || 0), l.moneda, cotizacion), 0
+    (s, l) => s + aUSD((l.kgCompra || 0) * (l.precioCompra || 0) * (1 + (l.comisionCompra || 0) / 100), l.moneda, cotizacion), 0
   );
 
   const kgVentaTotal = lotesVenta.reduce((s, l) => s + (l.kgVenta || 0), 0);
   const cabezasVentaTotal = lotesVenta.reduce((s, l) => s + (l.cantidad || 0), 0);
   const ingresoUSDTotal = lotesVenta.reduce(
-    (s, l) => s + aUSD((l.kgVenta || 0) * (l.precioVenta || 0), l.moneda, cotizacion), 0
+    (s, l) => s + aUSD((l.kgVenta || 0) * (l.precioVenta || 0) * (1 - (l.comisionVenta || 0) / 100), l.moneda, cotizacion), 0
   );
 
   const precioCompraUSD = kgCompraTotal > 0 ? costoUSDTotal / kgCompraTotal : 0;

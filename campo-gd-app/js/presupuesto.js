@@ -8,7 +8,7 @@ let selectedYear = new Date().getFullYear();
 let unsubIng = null, unsubEg = null, unsubPres = null;
 let charts = {};
 
-const YEAR_MIN = 2026, YEAR_MAX = 2035;
+const YEAR_MIN = 2026, YEAR_MAX = 2040;
 
 export function renderPresupuesto(container) {
   container.innerHTML = "";

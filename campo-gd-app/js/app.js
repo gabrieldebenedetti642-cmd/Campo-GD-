@@ -12,6 +12,7 @@ import { renderPresupuesto, unmountPresupuesto } from "./presupuesto.js";
 import { renderEscenarios, unmountEscenarios } from "./escenarios.js";
 import { modoLocal, estaConectado } from "./db.js";
 import { ensureUsuario, buildUsuarioPill } from "./usuario.js";
+import { ensureCampo, buildCampoPill } from "./campo.js";
 
 const views = {
   dashboard: { render: renderDashboard, unmount: unmountDashboard, label: "Dashboard" },
@@ -101,12 +102,24 @@ function initUsuarioPill() {
   rightWrap.appendChild(syncPill);
 }
 
+// El subtítulo de la marca pasa a mostrar con qué campo se está trabajando.
+function initCampoPill() {
+  const small = document.querySelector(".topbar .brand small");
+  if (!small) return;
+  small.classList.add("campo-pill");
+  buildCampoPill(small);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  // primero quién sos, después con qué campo vas a trabajar
   ensureUsuario(() => {
-    initTabs();
-    initSyncPill();
-    initUsuarioPill();
-    const startView = (window.location.hash || "#dashboard").slice(1);
-    switchTo(views[startView] ? startView : "dashboard");
+    ensureCampo(() => {
+      initTabs();
+      initSyncPill();
+      initUsuarioPill();
+      initCampoPill();
+      const startView = (window.location.hash || "#dashboard").slice(1);
+      switchTo(views[startView] ? startView : "dashboard");
+    });
   });
 });
