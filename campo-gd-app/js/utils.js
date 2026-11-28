@@ -42,12 +42,13 @@ export const PLAN_INGRESOS = [
 export const PLAN_EGRESOS = [
   { codigo: "2.1", nombre: "Sanidad", conceptos: ["Vacunación", "Desparasitación / Curación", "Sanidad (otro)"], otro: "Sanidad (otro)" },
   { codigo: "2.2", nombre: "Alimentación", conceptos: ["Suplemento / Alimento balanceado", "Forraje / Rollos / Silo"] },
-  { codigo: "2.3", nombre: "Combustible", conceptos: ["Nafta", "Gasoil", "Aceite / Lubricantes"] },
+  { codigo: "2.3", nombre: "Combustible", conceptos: ["Nafta", "Gasoil"] },
   { codigo: "2.4", nombre: "Mano de obra", conceptos: ["Sueldo / Jornal", "Changa / Contratista"] },
-  { codigo: "2.5", nombre: "Insumos", conceptos: ["Alambre / Postes / Tranqueras", "Herramientas", "Semillas", "Agroquímicos"] },
+  { codigo: "2.5", nombre: "Insumos", conceptos: ["Herramientas", "Semillas", "Agroquímicos"] },
   { codigo: "2.6", nombre: "Impuestos", conceptos: ["Impuesto inmobiliario", "Impuesto a las ganancias", "Otro impuesto"], otro: "Otro impuesto" },
   { codigo: "2.7", nombre: "Mantenimiento", conceptos: [
-    "Reparación de maquinaria", "Reparación de instalaciones", "Mantenimiento de casas", "Service de vehículo"] },
+    "Reparación de maquinaria", "Reparación de instalaciones", "Mantenimiento de casas", "Service de vehículo",
+    "Aceite / Lubricantes", "Alambre / Postes / Tranqueras"] },
   { codigo: "2.8", nombre: "Otros", conceptos: ["Honorarios (veterinario, ingeniero, contador)", "Seguro", "Otro"], otro: "Otro" },
 ];
 
