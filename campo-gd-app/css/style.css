@@ -663,13 +663,9 @@ table.fc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .fc-table td.fc-tot { font-weight: 700; border-left: 1px solid var(--line); }
 .fc-table td.neg { color: var(--red); }
 .fc-table td.fc-sup { background: #FDF3DC; }
-.fc-table tr.fc-seccion td { background: var(--green-bg); color: var(--green-dark); font-weight: 700; letter-spacing: .04em; padding: 6px 8px; }
-.fc-table tr.fc-hijo td { color: var(--ink-muted); font-size: 12.5px; }
-.fc-table tr.fc-hijo td:first-child { padding-left: 34px; }
-.fc-table tr.fc-grupo { cursor: pointer; font-weight: 600; }
-.fc-table tr.fc-grupo:hover td { background: #F4F8F2; }
-.fc-table tr.fc-grupo td.fc-sup { background: #FDF3DC; }
-.fc-toggle { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--green-dark); cursor: pointer; }
+.fc-table tr.fc-seccion td { background: #D3E6CF; color: var(--green-dark); font-weight: 700; letter-spacing: .04em; padding: 6px 8px; }
+.fc-toggle { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--green-dark); cursor: pointer; text-align: left; }
+.fc-toggle.fc-sin-hijos { cursor: default; }
 .fc-chev { display: inline-block; width: 14px; color: var(--gold); }
 .fc-table tr.fc-total td { font-weight: 700; border-top: 1.5px solid var(--ink); background: var(--panel); }
 .fc-table tr.fc-espacio td { border: none; padding: 4px; background: var(--panel); }
@@ -683,3 +679,29 @@ table.fc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .fc-table.fc-compacta thead th { font-size: 13px; }
 .fc-table.fc-compacta thead th:first-child, .fc-table.fc-compacta td:first-child { min-width: 150px; padding-left: 6px; }
 @media (max-width: 640px) { .fc-table td:first-child { min-width: 150px; } .fc-saldo-campo input { width: 110px; } }
+
+/* Flujo por niveles: rubros (verde claro), conceptos y facturas */
+.fc-barra { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
+.fc-barra .fc-unidad { margin: 0; }
+.fc-niveles { display: flex; align-items: center; gap: 8px; }
+.fc-niveles .eyebrow { margin: 0; }
+.fc-niveles .seg-btn { padding-left: 11px; padding-right: 11px; }
+.fc-niv-txt { font-weight: 500; }
+.fc-cod { display: inline-block; min-width: 38px; margin-right: 4px; font-variant-numeric: tabular-nums; color: var(--ink-muted); font-weight: 600; font-size: .92em; }
+.fc-table tr.fc-click { cursor: pointer; }
+.fc-table tr.fc-click:hover td { filter: brightness(.97); }
+.fc-table tr.fc-rubro td { background: var(--green-bg); font-weight: 600; }
+.fc-table tr.fc-rubro td.fc-sup { background: #F6E9C4; }
+.fc-table tr.fc-rubro td:first-child { background: var(--green-bg); }
+.fc-table tr.fc-rubro .fc-toggle { color: var(--green-dark); }
+.fc-table tr.fc-concepto td { font-weight: 500; }
+.fc-table tr.fc-concepto td:first-child { padding-left: 26px; }
+.fc-table tr.fc-concepto .fc-toggle { font-weight: 500; color: var(--ink); }
+.fc-table tr.fc-concepto td.fc-sup { background: #FDF3DC; }
+.fc-table tr.fc-factura td { font-size: 11.5px; color: var(--ink-muted); background: #FBFAF6; }
+.fc-table tr.fc-factura td:first-child { padding-left: 52px; background: #FBFAF6; }
+.fc-table tr.fc-factura-sup td { background: #FDF3DC; }
+.fc-table tr.fc-factura-sup td:first-child { background: #FDF3DC; }
+.fc-fact-txt { display: inline-block; max-width: 300px; white-space: normal; line-height: 1.25; vertical-align: middle; }
+.field-hint { font-size: 11px; color: var(--ink-muted); line-height: 1.3; }
+@media (max-width: 640px) { .fc-fact-txt { max-width: 135px; } .fc-table tr.fc-factura td:first-child { padding-left: 34px; } .fc-niv-txt { display: none; } }
