@@ -1,31 +1,26 @@
 import { listenTo, listenSetting, setSetting } from "./db.js";
-import { el, years, toast, confirmar, MESES_CORTOS, CATEGORIAS_EGRESO, CONCEPTOS_INGRESO } from "./utils.js";
+import { el, years, toast, confirmar, fmtMoney, fmtDate, MESES_CORTOS, planDe, codigoConcepto, ubicarEnPlan } from "./utils.js";
 
-// Flujo de caja mensual del año: plan de cuentas a la izquierda, meses en las columnas.
-// Cada celda suma lo ya cargado en Ingresos/Egresos (real) más los "supuestos" que se
-// agregan acá abajo (lo que todavía no pasó). Se puede ver en pesos, en dólares, o con
-// todo pasado a dólares a la cotización que tiene el sistema (la del Dashboard).
+// Flujo de caja mensual del año, ordenado por el plan de cuentas (rubro → concepto → factura)
+// con sus códigos: 1 Ingresos (1.1, 1.1.01…) y 2 Egresos (2.1, 2.1.01…). Cada celda suma lo ya
+// cargado en Ingresos/Egresos (real) más los "supuestos" que se agregan abajo (lo que todavía
+// no pasó). Los egresos cuentan en el mes de VENCIMIENTO de la factura (si no tiene, en su fecha).
+// Se puede ver en pesos, en dólares, o con todo pasado a dólares a la cotización del Dashboard.
 
 const YEAR_MIN = 2026, YEAR_MAX = 2040;
 const COTIZACION_DEFECTO = 1000; // la misma que usa el Dashboard hasta que se cargue otra
 
-// ---- Plan de cuentas -------------------------------------------------------
-// Ingresos: las ventas de hacienda se agrupan en un solo renglón que se abre por categoría.
-const ES_VENTA_HACIENDA = (c) => c.startsWith("Venta de") && c !== "Venta de granos / cosecha";
-const HACIENDA_HIJOS = CONCEPTOS_INGRESO.filter(ES_VENTA_HACIENDA);
-const OTROS_INGRESOS = CONCEPTOS_INGRESO.filter((c) => !ES_VENTA_HACIENDA(c));
-const HOJAS_INGRESO = [...HACIENDA_HIJOS, ...OTROS_INGRESOS];
-
-const kI = (concepto) => "I|" + concepto;
-const kE = (categoria) => "E|" + categoria;
-// Un concepto escrito a mano que no está en la lista cae en "Otro"; una categoría desconocida, en "Otros".
-const conceptoPlan = (c) => (HOJAS_INGRESO.includes(c) ? c : "Otro");
-const categoriaPlan = (c) => (CATEGORIAS_EGRESO.includes(c) ? c : "Otros");
+const TIPOS = [
+  { t: "I", cod: "1", nombre: "INGRESOS" },
+  { t: "E", cod: "2", nombre: "EGRESOS" },
+];
 
 // ---- Estado ----------------------------------------------------------------
 let selectedYear = new Date().getFullYear();
 let modo = "TOTAL"; // "ARS" | "USD" | "TOTAL"
-let abiertos = { hacienda: false };
+// Códigos abiertos: "1"/"2" muestran los rubros, "1.1" sus conceptos, "1.1.01" sus facturas.
+let abiertos = new Set(["1", "2"]);
+let nivel = 2; // 1 totales · 2 rubros · 3 conceptos · 4 facturas (null si se abrió algo a mano)
 let ingresos = [], egresos = [];
 let cotizacion = COTIZACION_DEFECTO;
 let datosAnio = { saldoArs: 0, saldoUsd: 0, supuestos: [] };
@@ -84,12 +79,20 @@ export function renderFlujoCaja(container) {
     ])
   );
 
+  const nivBtns = [[1, "1", "Totales"], [2, "2", "Categorías"], [3, "3", "Conceptos"], [4, "4", "Facturas"]].map(([n, num, txt]) => {
+    const b = el("button", { class: "seg-btn" + (nivel === n ? " active" : ""), type: "button", "data-nivel": String(n), title: "Ver hasta: " + txt }, [num, el("span", { class: "fc-niv-txt" }, " " + txt)]);
+    b.addEventListener("click", () => abrirNivel(n));
+    return b;
+  });
   container.appendChild(
     el("div", { class: "panel" }, [
-      el("div", { class: "fc-unidad", id: "fc-unidad" }),
+      el("div", { class: "fc-barra" }, [
+        el("div", { class: "fc-unidad", id: "fc-unidad" }),
+        el("div", { class: "fc-niveles" }, [el("span", { class: "eyebrow" }, "Ver hasta"), el("div", { class: "seg-toggle", id: "fc-niveles" }, nivBtns)]),
+      ]),
       el("div", { class: "table-wrap", id: "fc-table-wrap" }),
       el("p", { class: "sub", style: "margin-top:10px; font-size:12.5px; color:var(--ink-muted)" },
-        "Tocá \"Ventas de hacienda\" para ver el detalle por categoría. Las celdas amarillas incluyen supuestos (lo que todavía no está cargado en Ingresos / Egresos)."),
+        "Tocá una categoría para ver sus conceptos, y un concepto para ver cada factura cargada. Los egresos se cuentan en el mes de vencimiento de la factura. Las celdas amarillas incluyen supuestos (lo que todavía no está cargado en Ingresos / Egresos)."),
     ])
   );
 
@@ -169,13 +172,38 @@ async function guardarSaldo() {
 
 /* ------------------------------ SUPUESTOS ------------------------------ */
 
+// Un supuesto guarda su "key": "I|Rubro|Concepto" o "E|Rubro|Concepto".
+// Los que se cargaron con la versión anterior tienen "I|Concepto" y "E|Rubro": se siguen leyendo.
+function ubicarSupuesto(key) {
+  const p = String(key || "").split("|");
+  const tipo = p[0] === "I" ? "I" : "E";
+  let rec;
+  if (p.length >= 3) rec = { categoria: p[1], concepto: p.slice(2).join("|") };
+  else if (tipo === "I") rec = { concepto: p[1] };
+  else rec = { categoria: p[1] };
+  return { tipo, ...ubicarEnPlan(tipo, rec) };
+}
+
 function buildSupuestoForm() {
   const form = el("form", { class: "entry-form", id: "fc-sup-form" });
 
-  const selConcepto = el("select", { id: "fc-sup-concepto" }, [
-    el("optgroup", { label: "Ingresos" }, HOJAS_INGRESO.map((c) => el("option", { value: kI(c) }, c))),
-    el("optgroup", { label: "Egresos" }, CATEGORIAS_EGRESO.map((c) => el("option", { value: kE(c) }, c))),
-  ]);
+  const selTipo = el("select", { id: "fc-sup-tipo" }, [el("option", { value: "I" }, "Ingreso"), el("option", { value: "E" }, "Egreso")]);
+  const selRubro = el("select", { id: "fc-sup-rubro" });
+  const selConcepto = el("select", { id: "fc-sup-concepto" });
+  const llenarRubros = () => {
+    selRubro.innerHTML = "";
+    planDe(selTipo.value).forEach((r) => selRubro.appendChild(el("option", { value: r.nombre }, r.codigo + " " + r.nombre)));
+    llenarConceptos();
+  };
+  const llenarConceptos = () => {
+    selConcepto.innerHTML = "";
+    const r = planDe(selTipo.value).find((x) => x.nombre === selRubro.value);
+    (r ? r.conceptos : []).forEach((c, i) => selConcepto.appendChild(el("option", { value: c }, codigoConcepto(r, i) + " " + c)));
+  };
+  selTipo.addEventListener("change", llenarRubros);
+  selRubro.addEventListener("change", llenarConceptos);
+  llenarRubros();
+
   const selMes = el("select", { id: "fc-sup-mes" }, MESES_CORTOS.map((m, i) => el("option", { value: String(i + 1) }, m)));
   selMes.value = String(Math.min(12, new Date().getMonth() + 2)); // por defecto, el mes que viene
   const monto = el("input", { type: "number", id: "fc-sup-monto", step: "0.01", min: "0" });
@@ -183,7 +211,9 @@ function buildSupuestoForm() {
   const repetir = el("input", { type: "checkbox", id: "fc-sup-repetir" });
 
   const campo = (label, id, control) => el("div", { class: "field" }, [el("label", { for: id }, label), control]);
-  form.appendChild(campo("Concepto", "fc-sup-concepto", selConcepto));
+  form.appendChild(campo("Tipo", "fc-sup-tipo", selTipo));
+  form.appendChild(campo("Categoría (rubro)", "fc-sup-rubro", selRubro));
+  form.appendChild(campo("Concepto (subrubro)", "fc-sup-concepto", selConcepto));
   form.appendChild(campo("Mes", "fc-sup-mes", selMes));
   form.appendChild(campo("Monto", "fc-sup-monto", monto));
   form.appendChild(campo("Moneda", "fc-sup-moneda", selMon));
@@ -192,13 +222,13 @@ function buildSupuestoForm() {
     el("label", { class: "fc-check", for: "fc-sup-repetir" }, [repetir, " cada mes hasta diciembre"]),
   ]));
   form.appendChild(el("div", { class: "field" }, [
-    el("label", {}, " "),
+    el("label", {}, " "),
     el("button", { class: "btn btn-primary", type: "submit" }, "Agregar supuesto"),
   ]));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const key = selConcepto.value;
+    const key = [selTipo.value, selRubro.value, selConcepto.value].join("|");
     const mes = parseInt(selMes.value, 10);
     const m = parseFloat(monto.value) || 0;
     if (m <= 0) { toast("Escribí el monto del supuesto", true); return; }
@@ -221,24 +251,21 @@ function buildSupuestoForm() {
   return form;
 }
 
-const nombreDeKey = (key) => key.slice(2);
-const esIngresoKey = (key) => key.startsWith("I|");
-
 function renderSupuestosLista() {
   const wrap = document.getElementById("fc-sup-lista");
   if (!wrap) return;
   wrap.innerHTML = "";
-  const lista = [...datosAnio.supuestos].sort((a, b) =>
-    (esIngresoKey(a.key) === esIngresoKey(b.key) ? 0 : esIngresoKey(a.key) ? -1 : 1) ||
-    a.key.localeCompare(b.key) || a.mes - b.mes);
+  const lista = datosAnio.supuestos
+    .map((s) => ({ s, u: ubicarSupuesto(s.key) }))
+    .sort((a, b) => (a.u.tipo === b.u.tipo ? 0 : a.u.tipo === "I" ? -1 : 1) || a.u.codigo.localeCompare(b.u.codigo, "es", { numeric: true }) || a.s.mes - b.s.mes);
   if (lista.length === 0) {
     wrap.appendChild(el("p", { style: "font-size:13px; color:var(--ink-muted); margin:0" }, "Todavía no cargaste supuestos para " + selectedYear + "."));
     return;
   }
   const table = el("table", { class: "data-table" });
-  table.appendChild(el("thead", {}, el("tr", {}, ["Tipo", "Concepto", "Mes", "Monto", "Moneda", ""].map((h) => el("th", {}, h)))));
+  table.appendChild(el("thead", {}, el("tr", {}, ["Tipo", "Categoría", "Concepto", "Mes", "Monto", "Moneda", ""].map((h) => el("th", {}, h)))));
   const tbody = el("tbody");
-  lista.forEach((s) => {
+  lista.forEach(({ s, u }) => {
     const del = el("button", { class: "btn btn-danger-ghost btn-sm", type: "button" }, "Borrar");
     del.addEventListener("click", async () => {
       if (!confirmar("¿Borrar este supuesto?")) return;
@@ -251,8 +278,9 @@ function renderSupuestosLista() {
       }
     });
     tbody.appendChild(el("tr", {}, [
-      el("td", {}, esIngresoKey(s.key) ? "Ingreso" : "Egreso"),
-      el("td", {}, nombreDeKey(s.key)),
+      el("td", {}, u.tipo === "I" ? "Ingreso" : "Egreso"),
+      el("td", {}, u.rubro.codigo + " " + u.rubro.nombre),
+      el("td", {}, u.codigo + " " + u.concepto),
       el("td", {}, MESES_CORTOS[s.mes - 1] || ""),
       el("td", { class: "num" }, (Number(s.monto) || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })),
       el("td", {}, el("span", { class: "badge " + (s.moneda === "USD" ? "usd" : "ars") }, s.moneda)),
@@ -268,52 +296,91 @@ function renderSupuestosLista() {
 
 const celdaVacia = () => ({ ars: 0, usd: 0, sup: 0 }); // sup = cuánto de la celda es supuesto (solo para marcarla)
 
-// Devuelve { celdas: { key: [12 celdas] } } con lo real + supuestos, separado por moneda.
+// Arma el plan completo con lo real + los supuestos del año:
+//   { I: [rubro…], E: [rubro…] }, rubro = { codigo, nombre, conceptos: [concepto…] }
+//   concepto = { codigo, nombre, celdas: [12 × {ars, usd, sup}], items: [facturas y supuestos] }
 function agregar() {
-  const celdas = {};
-  const get = (key, mes) => {
-    if (!celdas[key]) celdas[key] = Array.from({ length: 12 }, celdaVacia);
-    return celdas[key][mes];
-  };
-  const enAnio = (it) => (it.fecha || "").startsWith(String(selectedYear));
-  const mesDe = (it) => parseInt((it.fecha || "").slice(5, 7), 10) - 1;
-  const suma = (c, moneda, monto, esSup) => {
-    if (moneda === "USD") c.usd += monto; else c.ars += monto;
-    if (esSup) c.sup += 1;
-  };
-  ingresos.filter(enAnio).forEach((it) => {
-    const m = mesDe(it);
-    if (m >= 0 && m < 12) suma(get(kI(conceptoPlan(it.concepto)), m), it.moneda, Number(it.monto) || 0, false);
+  const nuevoConcepto = (codigo, nombre) => ({ codigo, nombre, celdas: Array.from({ length: 12 }, celdaVacia), items: [] });
+  const arbol = {};
+  TIPOS.forEach(({ t }) => {
+    arbol[t] = planDe(t).map((r) => ({
+      codigo: r.codigo, nombre: r.nombre,
+      conceptos: r.conceptos.map((c, i) => nuevoConcepto(codigoConcepto(r, i), c)),
+    }));
   });
-  egresos.filter(enAnio).forEach((it) => {
-    const m = mesDe(it);
-    if (m >= 0 && m < 12) suma(get(kE(categoriaPlan(it.categoria)), m), it.moneda, Number(it.monto) || 0, false);
+  // dónde cae un movimiento (si el rubro no tiene un concepto "otro", se crea "Otros conceptos" R.99)
+  const buscar = (t, u) => {
+    const r = arbol[t].find((x) => x.codigo === u.rubro.codigo);
+    let c = r.conceptos.find((x) => x.codigo === u.codigo);
+    if (!c) { c = nuevoConcepto(u.codigo, u.concepto); r.conceptos.push(c); }
+    return c;
+  };
+  const sumar = (c, mes, moneda, monto, item) => {
+    const celda = c.celdas[mes];
+    if (moneda === "USD") celda.usd += monto; else celda.ars += monto;
+    if (item.sup) celda.sup += 1;
+    c.items.push({ mes, moneda: moneda === "USD" ? "USD" : "$", monto, ...item });
+  };
+  const anioMes = (iso) => ((iso || "").startsWith(String(selectedYear)) ? parseInt(iso.slice(5, 7), 10) - 1 : -1);
+
+  ingresos.forEach((it) => {
+    const mes = anioMes(it.fecha);
+    if (mes < 0 || mes > 11) return;
+    sumar(buscar("I", ubicarEnPlan("I", it)), mes, it.moneda, Number(it.monto) || 0, {
+      fecha: it.fecha, numero: it.factura || "", parte: it.cliente || "", detalle: it.concepto || "",
+    });
+  });
+  egresos.forEach((it) => {
+    const cuando = it.vencimiento || it.fecha; // el egreso entra en el mes en que vence la factura
+    const mes = anioMes(cuando);
+    if (mes < 0 || mes > 11) return;
+    sumar(buscar("E", ubicarEnPlan("E", it)), mes, it.moneda, Number(it.monto) || 0, {
+      fecha: it.fecha, venc: it.vencimiento || "", numero: it.comprobante || "", parte: it.proveedor || "", detalle: it.concepto || "",
+    });
   });
   datosAnio.supuestos.forEach((s) => {
-    const m = (s.mes || 0) - 1;
-    if (m >= 0 && m < 12) suma(get(s.key, m), s.moneda, Number(s.monto) || 0, true);
+    const mes = (s.mes || 0) - 1;
+    if (mes < 0 || mes > 11) return;
+    const u = ubicarSupuesto(s.key);
+    sumar(buscar(u.tipo, u), mes, s.moneda, Number(s.monto) || 0, { sup: true });
   });
-  return celdas;
+  return arbol;
 }
 
 // Valor de una celda en la moneda elegida. En "Total en dólares" los pesos se pasan a USD con la cotización.
 const valorCelda = (c) => (modo === "ARS" ? c.ars : modo === "USD" ? c.usd : c.usd + c.ars / cotizacion);
+const valorItem = (it) => (modo === "ARS" ? (it.moneda === "USD" ? 0 : it.monto) : modo === "USD" ? (it.moneda === "USD" ? it.monto : 0) : (it.moneda === "USD" ? it.monto : it.monto / cotizacion));
 const sumaMeses = (arr) => arr.reduce((s, v) => s + v, 0);
+const sumaCol = (arrs) => Array.from({ length: 12 }, (_, i) => arrs.reduce((s, a) => s + a[i], 0));
+
+// Botones "Ver hasta": 1 solo totales · 2 + categorías · 3 + conceptos · 4 + facturas
+function abrirNivel(n) {
+  const arbol = agregar();
+  abiertos = new Set();
+  if (n >= 2) TIPOS.forEach(({ cod }) => abiertos.add(cod));
+  if (n >= 3) TIPOS.forEach(({ t }) => arbol[t].forEach((r) => abiertos.add(r.codigo)));
+  if (n >= 4) TIPOS.forEach(({ t }) => arbol[t].forEach((r) => r.conceptos.forEach((c) => { if (c.items.length) abiertos.add(c.codigo); })));
+  nivel = n;
+  compute();
+}
+
+function alternar(codigo) {
+  if (abiertos.has(codigo)) abiertos.delete(codigo); else abiertos.add(codigo);
+  nivel = null;
+  compute();
+}
 
 function compute() {
   const wrap = document.getElementById("fc-table-wrap");
   if (!wrap) return;
-  const celdas = agregar();
-  const hoja = (key) => (celdas[key] || Array.from({ length: 12 }, celdaVacia));
-  const meses = (key) => hoja(key).map(valorCelda);
-  const suma2 = (keys) => Array.from({ length: 12 }, (_, i) => keys.reduce((s, k) => s + meses(k)[i], 0));
+  const arbol = agregar();
 
-  const hijosKeys = HACIENDA_HIJOS.map(kI);
-  const otrosKeys = OTROS_INGRESOS.map(kI);
-  const egKeys = CATEGORIAS_EGRESO.map(kE);
-
-  const totIng = suma2([...hijosKeys, ...otrosKeys]);
-  const totEg = suma2(egKeys);
+  // valores por mes (en la moneda elegida) de cada concepto, rubro y tipo
+  const valores = (c) => c.celdas.map(valorCelda);
+  const valoresRubro = (r) => sumaCol(r.conceptos.map(valores));
+  const totTipo = {};
+  TIPOS.forEach(({ t }) => { totTipo[t] = sumaCol(arbol[t].map(valoresRubro)); });
+  const totIng = totTipo.I, totEg = totTipo.E;
   const neto = totIng.map((v, i) => v - totEg[i]);
 
   const saldoIni0 = modo === "ARS" ? datosAnio.saldoArs
@@ -336,64 +403,94 @@ function compute() {
   }
   const uni = document.getElementById("fc-unidad");
   if (uni) uni.textContent = `Valores en ${modo === "ARS" ? "pesos ($)" : modo === "USD" ? "dólares (USD)" : "dólares (USD), todo convertido"} — año ${selectedYear}`;
+  document.querySelectorAll("#fc-niveles .seg-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.nivel) === nivel));
 
   // --- armado de la tabla ---
   const fmt = (n) => (Math.abs(n) < 0.5 ? "-" : (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("es-AR", { maximumFractionDigits: 0 }));
   const numTd = (v, extra = "") => el("td", { class: "num " + extra }, fmt(v));
-  const celdaTd = (key, i, v) => {
-    const c = hoja(key)[i];
-    const td = el("td", { class: "num" + (c.sup ? " fc-sup" : "") }, fmt(v));
-    if (c.sup) td.title = "Incluye supuestos";
-    return td;
-  };
   const colorNeg = (v) => (v < -0.5 ? "neg" : "");
+  const cod = (txt) => el("span", { class: "fc-cod" }, txt);
 
   const table = el("table", { class: "fc-table" });
   table.appendChild(el("thead", {}, el("tr", {}, [
-    el("th", {}, "Concepto"),
+    el("th", {}, "Plan de cuentas"),
     ...MESES_CORTOS.map((m) => el("th", {}, m)),
-    el("th", {}, "Total año"),
+    el("th", {}, "Total anual"),
   ])));
   const tbody = el("tbody");
-  const seccion = (txt) => tbody.appendChild(el("tr", { class: "fc-seccion" }, [el("td", { colspan: "14" }, txt)]));
-  const filaHoja = (key, nombre, esHijo) => {
-    const m = meses(key);
-    tbody.appendChild(el("tr", { class: esHijo ? "fc-hijo" : "fc-hoja" }, [
-      el("td", {}, nombre),
-      ...m.map((v, i) => celdaTd(key, i, v)),
-      numTd(sumaMeses(m), "fc-tot"),
-    ]));
+
+  // fila clickeable (sección, rubro o concepto): chevrón + código + nombre, 12 meses y total anual
+  const filaDesplegable = (clase, codigo, nombre, valoresMes, supMes, tieneHijos) => {
+    const abierto = abiertos.has(codigo);
+    const nombreEl = tieneHijos
+      ? el("button", { class: "fc-toggle", type: "button", "aria-expanded": String(abierto) }, [el("span", { class: "fc-chev" }, abierto ? "▾" : "▸"), cod(codigo), " " + nombre])
+      : el("span", { class: "fc-toggle fc-sin-hijos" }, [el("span", { class: "fc-chev" }, " "), cod(codigo), " " + nombre]);
+    const tr = el("tr", { class: clase + (tieneHijos ? " fc-click" : "") + (abierto ? " abierto" : ""), "data-codigo": codigo }, [
+      el("td", {}, nombreEl),
+      ...valoresMes.map((v, i) => {
+        const td = numTd(v);
+        if (supMes && supMes[i]) { td.classList.add("fc-sup"); td.title = "Incluye supuestos"; }
+        return td;
+      }),
+      numTd(sumaMeses(valoresMes), "fc-tot"),
+    ]);
+    if (tieneHijos) tr.addEventListener("click", () => alternar(codigo));
+    tbody.appendChild(tr);
   };
+
+  const filaFactura = (it, nombreConcepto) => {
+    const v = valorItem(it);
+    if (Math.abs(v) < 0.0001) return; // en la vista en pesos no se listan las facturas en dólares y al revés
+    const partes = it.sup
+      ? ["Supuesto"]
+      : [fmtDate(it.fecha), it.numero ? "N° " + it.numero : "", it.parte].filter(Boolean);
+    if (!it.sup && it.detalle && it.detalle !== nombreConcepto) partes.push(it.detalle); // concepto escrito a mano
+    if (!it.sup && it.venc && it.venc !== it.fecha) partes.push("vence " + fmtDate(it.venc));
+    const celdasMes = Array.from({ length: 12 }, (_, i) => (i === it.mes ? v : 0));
+    const orig = it.moneda === "USD" ? "" : (modo === "TOTAL" ? " (" + fmtMoney(it.monto, "$") + ")" : "");
+    const texto = partes.join(" · ") + orig;
+    const tr = el("tr", { class: "fc-factura" + (it.sup ? " fc-factura-sup" : "") }, [
+      el("td", { title: texto }, [el("span", { class: "fc-fact-txt" }, texto)]),
+      ...celdasMes.map((x) => numTd(x)),
+      numTd(v, "fc-tot"),
+    ]);
+    tbody.appendChild(tr);
+  };
+
   const filaTotal = (cls, txt, arr, tot) => tbody.appendChild(el("tr", { class: cls }, [
     el("td", {}, txt),
     ...arr.map((v) => numTd(v, colorNeg(v))),
     numTd(tot, "fc-tot " + colorNeg(tot)),
   ]));
 
-  seccion("INGRESOS");
-  // Ventas de hacienda: un renglón que se abre por categoría
-  const hacienda = suma2(hijosKeys);
-  const abierto = abiertos.hacienda;
-  const haciendaSup = hijosKeys.map((k) => hoja(k).map((c) => c.sup));
-  const toggle = el("button", { class: "fc-toggle", type: "button", "aria-expanded": String(abierto), title: "Ver el detalle por categoría" },
-    [el("span", { class: "fc-chev" }, abierto ? "▾" : "▸"), " Ventas de hacienda"]);
-  const filaGrupo = el("tr", { class: "fc-grupo" + (abierto ? " abierto" : ""), title: "Tocá para " + (abierto ? "cerrar" : "ver") + " las categorías" }, [
-    el("td", {}, toggle),
-    ...hacienda.map((v, i) => {
-      const td = el("td", { class: "num" + (haciendaSup.some((s) => s[i]) ? " fc-sup" : "") }, fmt(v));
-      return td;
-    }),
-    numTd(sumaMeses(hacienda), "fc-tot"),
-  ]);
-  filaGrupo.addEventListener("click", () => { abiertos.hacienda = !abiertos.hacienda; compute(); });
-  tbody.appendChild(filaGrupo);
-  if (abierto) HACIENDA_HIJOS.forEach((c) => filaHoja(kI(c), c.replace(/^Venta de /, "").replace(/^./, (x) => x.toUpperCase()), true));
-  OTROS_INGRESOS.forEach((c) => filaHoja(kI(c), c, false));
-  filaTotal("fc-total", "TOTAL INGRESOS", totIng, sumaMeses(totIng));
+  TIPOS.forEach(({ t, cod: codTipo, nombre }) => {
+    const abiertoTipo = abiertos.has(codTipo);
+    const rubros = arbol[t];
+    // encabezado de sección (se toca para ver/ocultar las categorías)
+    const toggle = el("button", { class: "fc-toggle", type: "button", "aria-expanded": String(abiertoTipo) },
+      [el("span", { class: "fc-chev" }, abiertoTipo ? "▾" : "▸"), cod(codTipo), " " + nombre]);
+    const filaSec = el("tr", { class: "fc-seccion fc-click" }, [el("td", { colspan: "14" }, toggle)]);
+    filaSec.addEventListener("click", () => alternar(codTipo));
+    tbody.appendChild(filaSec);
 
-  seccion("EGRESOS");
-  CATEGORIAS_EGRESO.forEach((c) => filaHoja(kE(c), c, false));
-  filaTotal("fc-total", "TOTAL EGRESOS", totEg, sumaMeses(totEg));
+    if (abiertoTipo) {
+      rubros.forEach((r) => {
+        const supRubro = Array.from({ length: 12 }, (_, i) => r.conceptos.some((c) => c.celdas[i].sup));
+        filaDesplegable("fc-rubro", r.codigo, r.nombre, valoresRubro(r), supRubro, true);
+        if (!abiertos.has(r.codigo)) return;
+        r.conceptos.forEach((c) => {
+          const conItems = c.items.length > 0;
+          filaDesplegable("fc-concepto", c.codigo, c.nombre, valores(c), c.celdas.map((x) => x.sup), conItems);
+          if (conItems && abiertos.has(c.codigo)) {
+            [...c.items]
+              .sort((a, b) => a.mes - b.mes || (a.sup ? 1 : 0) - (b.sup ? 1 : 0) || (a.fecha || "").localeCompare(b.fecha || ""))
+              .forEach((it) => filaFactura(it, c.nombre));
+          }
+        });
+      });
+    }
+    filaTotal("fc-total", "TOTAL " + nombre, totTipo[t], sumaMeses(totTipo[t]));
+  });
 
   tbody.appendChild(el("tr", { class: "fc-espacio" }, [el("td", { colspan: "14" })]));
   filaTotal("fc-neto", "FLUJO NETO DEL MES (Ingresos − Egresos)", neto, sumaMeses(neto));

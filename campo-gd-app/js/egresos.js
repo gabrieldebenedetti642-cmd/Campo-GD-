@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CATEGORIAS_EGRESO, CONCEPTOS_EGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue } from "./utils.js";
+import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, PLAN_EGRESOS, fieldsRubroConcepto, setRubroConcepto, getSelectOtroValue } from "./utils.js";
 import { buildScannerPanel } from "./facturaScanner.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
@@ -54,9 +54,10 @@ export function unmountEgresos() {
 function buildForm() {
   const form = el("form", { class: "entry-form", id: "egreso-form" });
 
-  const fFecha = fieldInput("Fecha", "date", "eg-fecha", todayISO());
-  const fConcepto = fieldSelectOtro("Concepto", "eg-concepto", CONCEPTOS_EGRESO);
-  const fCategoria = fieldSelect("Categoría", "eg-categoria", CATEGORIAS_EGRESO);
+  const fFecha = fieldInput("Fecha de la factura", "date", "eg-fecha", todayISO());
+  const fVence = fieldInput("Vencimiento de la factura (opcional)", "date", "eg-vencimiento", "");
+  fVence.title = "El Flujo de Caja cuenta el gasto en el mes del vencimiento. Si la dejás vacía, cuenta en la fecha de la factura.";
+  const [fCategoria, fConcepto] = fieldsRubroConcepto(PLAN_EGRESOS, "eg-categoria", "eg-concepto");
   const fProveedor = fieldInput("Proveedor", "text", "eg-proveedor", "");
   const fComprobante = fieldInput("N° Comprobante", "text", "eg-comprobante", "");
   const fMoneda = fieldSelect("Moneda", "eg-moneda", ["$", "USD"]);
@@ -68,12 +69,13 @@ function buildForm() {
     el("button", { class: "btn btn-primary", type: "submit", id: "eg-submit-btn" }, "Guardar"),
   ]);
 
-  [fFecha, fConcepto, fCategoria, fProveedor, fComprobante, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
+  [fFecha, fVence, fCategoria, fConcepto, fProveedor, fComprobante, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {
       fecha: document.getElementById("eg-fecha").value,
+      vencimiento: document.getElementById("eg-vencimiento").value || "",
       concepto: getSelectOtroValue("eg-concepto"),
       categoria: document.getElementById("eg-categoria").value,
       proveedor: document.getElementById("eg-proveedor").value.trim(),
@@ -98,7 +100,7 @@ function buildForm() {
       }
       form.reset();
       document.getElementById("eg-fecha").value = todayISO();
-      setSelectOtroValue("eg-concepto", "", CONCEPTOS_EGRESO);
+      setRubroConcepto(PLAN_EGRESOS, "eg-categoria", "eg-concepto", PLAN_EGRESOS[0].nombre, "");
     } catch (err) {
       console.error(err);
       toast("No se pudo guardar: " + err.message, true);
@@ -139,15 +141,16 @@ function renderTable() {
   }
   const table = el("table", { class: "data-table" });
   const thead = el("thead", {}, el("tr", {}, [
-    el("th", {}, "Fecha"), el("th", {}, "Concepto"), el("th", {}, "Categoría"),
+    el("th", {}, "Fecha"), el("th", {}, "Vence"), el("th", {}, "Categoría"), el("th", {}, "Concepto"),
     el("th", {}, "Proveedor"), el("th", {}, "N° Comp."), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, "Usuario"), el("th", {}, ""),
   ]));
   const tbody = el("tbody");
   items.forEach((it) => {
     const tr = el("tr", {}, [
       el("td", {}, fmtDate(it.fecha)),
-      el("td", {}, it.concepto || ""),
+      el("td", {}, it.vencimiento ? fmtDate(it.vencimiento) : "—"),
       el("td", {}, it.categoria || ""),
+      el("td", {}, it.concepto || ""),
       el("td", {}, it.proveedor || ""),
       el("td", {}, it.comprobante || ""),
       el("td", {}, el("span", { class: "badge " + (it.moneda === "USD" ? "usd" : "ars") }, it.moneda || "$")),
@@ -185,8 +188,8 @@ function rowActions(it) {
 function startEdit(it) {
   editingId = it.id;
   document.getElementById("eg-fecha").value = it.fecha || "";
-  setSelectOtroValue("eg-concepto", it.concepto || "", CONCEPTOS_EGRESO);
-  document.getElementById("eg-categoria").value = it.categoria || CATEGORIAS_EGRESO[0];
+  document.getElementById("eg-vencimiento").value = it.vencimiento || "";
+  setRubroConcepto(PLAN_EGRESOS, "eg-categoria", "eg-concepto", it.categoria, it.concepto || "");
   document.getElementById("eg-proveedor").value = it.proveedor || "";
   document.getElementById("eg-comprobante").value = it.comprobante || "";
   document.getElementById("eg-moneda").value = it.moneda || "$";

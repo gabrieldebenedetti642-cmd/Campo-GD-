@@ -1,5 +1,5 @@
 import { addDocTo, updateDocIn, deleteDocFrom, listenTo } from "./db.js";
-import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, CONCEPTOS_INGRESO, fieldSelectOtro, getSelectOtroValue, setSelectOtroValue } from "./utils.js";
+import { fmtMoney, fmtDate, todayISO, el, toast, confirmar, PLAN_INGRESOS, fieldsRubroConcepto, setRubroConcepto, getSelectOtroValue, ubicarEnPlan } from "./utils.js";
 import { buildScannerPanel } from "./facturaScanner.js";
 import { getUsuarioActual, usuarioBadge } from "./usuario.js";
 
@@ -62,7 +62,7 @@ function buildForm() {
 
   const fFecha = fieldInput("Fecha", "date", "ing-fecha", todayISO());
   const fFactura = fieldInput("N° Factura", "text", "ing-factura", "");
-  const fConcepto = fieldSelectOtro("Concepto", "ing-concepto", CONCEPTOS_INGRESO);
+  const [fCategoria, fConcepto] = fieldsRubroConcepto(PLAN_INGRESOS, "ing-categoria", "ing-concepto");
   const fCliente = fieldInput("Cliente", "text", "ing-cliente", "");
   const fMoneda = fieldSelect("Moneda", "ing-moneda", ["$", "USD"]);
   const fMonto = fieldInput("Monto", "number", "ing-monto", "");
@@ -73,13 +73,14 @@ function buildForm() {
     el("button", { class: "btn btn-primary", type: "submit", id: "ing-submit-btn" }, "Guardar"),
   ]);
 
-  [fFecha, fFactura, fConcepto, fCliente, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
+  [fFecha, fFactura, fCategoria, fConcepto, fCliente, fMoneda, fMonto, btnRow].forEach((f) => form.appendChild(f));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {
       fecha: document.getElementById("ing-fecha").value,
       factura: document.getElementById("ing-factura").value.trim(),
+      categoria: document.getElementById("ing-categoria").value,
       concepto: getSelectOtroValue("ing-concepto"),
       cliente: document.getElementById("ing-cliente").value.trim(),
       moneda: document.getElementById("ing-moneda").value,
@@ -102,7 +103,7 @@ function buildForm() {
       }
       form.reset();
       document.getElementById("ing-fecha").value = todayISO();
-      setSelectOtroValue("ing-concepto", "", CONCEPTOS_INGRESO);
+      setRubroConcepto(PLAN_INGRESOS, "ing-categoria", "ing-concepto", PLAN_INGRESOS[0].nombre, "");
     } catch (err) {
       console.error(err);
       toast("No se pudo guardar: " + err.message, true);
@@ -145,7 +146,7 @@ function renderTable() {
   }
   const table = el("table", { class: "data-table" });
   const thead = el("thead", {}, el("tr", {}, [
-    el("th", {}, "Fecha"), el("th", {}, "N° Factura"), el("th", {}, "Concepto"),
+    el("th", {}, "Fecha"), el("th", {}, "N° Factura"), el("th", {}, "Categoría"), el("th", {}, "Concepto"),
     el("th", {}, "Cliente"), el("th", {}, "Moneda"), el("th", {}, "Monto"), el("th", {}, "Usuario"), el("th", {}, ""),
   ]));
   const tbody = el("tbody");
@@ -153,6 +154,7 @@ function renderTable() {
     const tr = el("tr", {}, [
       el("td", {}, fmtDate(it.fecha)),
       el("td", {}, it.factura || ""),
+      el("td", {}, it.categoria || ubicarEnPlan("I", it).rubro.nombre),
       el("td", {}, it.concepto || ""),
       el("td", {}, it.cliente || ""),
       el("td", {}, el("span", { class: "badge " + (it.moneda === "USD" ? "usd" : "ars") }, it.moneda || "$")),
@@ -191,7 +193,7 @@ function startEdit(it) {
   editingId = it.id;
   document.getElementById("ing-fecha").value = it.fecha || "";
   document.getElementById("ing-factura").value = it.factura || "";
-  setSelectOtroValue("ing-concepto", it.concepto || "", CONCEPTOS_INGRESO);
+  setRubroConcepto(PLAN_INGRESOS, "ing-categoria", "ing-concepto", it.categoria || ubicarEnPlan("I", it).rubro.nombre, it.concepto || "");
   document.getElementById("ing-cliente").value = it.cliente || "";
   document.getElementById("ing-moneda").value = it.moneda || "$";
   document.getElementById("ing-monto").value = it.monto || "";
